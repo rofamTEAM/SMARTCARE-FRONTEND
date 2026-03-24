@@ -9,6 +9,7 @@
     "jsx": "preserve",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
     "resolveJsonModule": true,
     "allowJs": true,
     "strict": true,
@@ -26,21 +27,6 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ],
-      "@/components/*": [
-        "./src/components/*"
-      ],
-      "@/lib/*": [
-        "./src/lib/*"
-      ],
-      "@/utils/*": [
-        "./src/utils/*"
-      ],
-      "@/hooks/*": [
-        "./src/hooks/*"
-      ],
-      "@/styles/*": [
-        "./src/styles/*"
       ]
     }
   },
