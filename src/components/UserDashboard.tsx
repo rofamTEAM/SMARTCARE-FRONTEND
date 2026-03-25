@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Calendar,
@@ -15,6 +15,7 @@ import {
   X,
   AlertCircle,
   User,
+  Timer,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -67,6 +68,54 @@ interface Booking {
   date: string;
   time: string;
   reason: string;
+}
+
+// Countdown timer for a target datetime string
+function useCountdown(dateStr: string, timeStr: string) {
+  const getTarget = () => {
+    const [h, mPart] = timeStr.split(':');
+    const [min, period] = mPart.split(' ');
+    let hours = parseInt(h);
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    const d = new Date(dateStr);
+    d.setHours(hours, parseInt(min), 0, 0);
+    return d;
+  };
+
+  const calc = () => {
+    const diff = getTarget().getTime() - Date.now();
+    if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0, past: true };
+    return {
+      days: Math.floor(diff / 86400000),
+      hours: Math.floor((diff % 86400000) / 3600000),
+      minutes: Math.floor((diff % 3600000) / 60000),
+      seconds: Math.floor((diff % 60000) / 1000),
+      past: false,
+    };
+  };
+
+  const [countdown, setCountdown] = useState(calc);
+  useEffect(() => {
+    const id = setInterval(() => setCountdown(calc()), 1000);
+    return () => clearInterval(id);
+  }, [dateStr, timeStr]);
+
+  return countdown;
+}
+
+function CountdownBadge({ date, time }: { date: string; time: string }) {
+  const { days, hours, minutes, seconds, past } = useCountdown(date, time);
+  if (past) return <span className="text-xs px-2 py-1 bg-muted text-muted-foreground rounded-full">Completed</span>;
+  return (
+    <div className="flex items-center gap-1 text-xs font-mono">
+      <Timer className="size-3 text-primary" />
+      {days > 0 && <span className="px-1.5 py-0.5 bg-primary/10 text-primary rounded">{days}d</span>}
+      <span className="px-1.5 py-0.5 bg-primary/10 text-primary rounded">{String(hours).padStart(2, '0')}h</span>
+      <span className="px-1.5 py-0.5 bg-primary/10 text-primary rounded">{String(minutes).padStart(2, '0')}m</span>
+      <span className="px-1.5 py-0.5 bg-primary/10 text-primary rounded">{String(seconds).padStart(2, '0')}s</span>
+    </div>
+  );
 }
 
 export function UserDashboard({ session }: UserDashboardProps) {
@@ -363,19 +412,26 @@ export function UserDashboard({ session }: UserDashboardProps) {
             <h3 className="text-base font-semibold text-foreground mb-4">My Appointments</h3>
             <div className="space-y-3">
               {bookings.map((b, i) => (
-                <div key={i} className="flex items-center gap-4 p-4 bg-card/40 backdrop-blur-sm rounded-xl border border-border">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground font-bold flex-shrink-0">
-                    {b.doctor.split(' ')[1]?.[0] ?? 'D'}
+                <div key={i} className="p-4 bg-card/40 backdrop-blur-sm rounded-xl border border-border space-y-3">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-primary-foreground font-bold flex-shrink-0">
+                      {b.doctor.split(' ')[1]?.[0] ?? 'D'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{b.doctor}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {b.dept} · {new Date(b.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at {b.time}
+                      </p>
+                    </div>
+                    <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full flex-shrink-0">
+                      Confirmed
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{b.doctor}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {b.dept} · {new Date(b.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at {b.time}
-                    </p>
+                  {/* Countdown */}
+                  <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                    <span className="text-xs text-muted-foreground">Time until appointment</span>
+                    <CountdownBadge date={b.date} time={b.time} />
                   </div>
-                  <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full flex-shrink-0">
-                    Confirmed
-                  </span>
                 </div>
               ))}
             </div>

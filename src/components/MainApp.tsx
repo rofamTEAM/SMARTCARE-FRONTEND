@@ -308,7 +308,7 @@ export function MainApp({ session, supabase }: MainAppProps) {
   // Use single menu for all users
   const menuItems = isSuperAdmin ? superAdminMenuItems : regularMenuItems.filter((item) => {
     if (userRole === 'user') {
-      return ['dashboard', 'appointments', 'help'].includes(item.id);
+      return ['dashboard', 'help'].includes(item.id);
     }
     return item.roles.includes(userRole);
   });
