@@ -51,7 +51,6 @@ export function NavbarAIChat({ session, isOpen, onClose }: NavbarAIChatProps) {
       
       return response.content;
     } catch (error) {
-      console.error('AI Error:', error);
       return 'I apologize, but I encountered an error. Please try again.';
     }
   };

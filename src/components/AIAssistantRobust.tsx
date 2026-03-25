@@ -83,6 +83,51 @@ export function AIAssistant({ currentPage = 'dashboard', userRole = 'admin', isO
   };
 
   const generateResponse = async (userMessage: string): Promise<AIMessage> => {
+    const roleRestrictions: Record<string, { allowed: string[]; blocked: string[]; description: string }> = {
+      user: {
+        allowed: ['appointment booking', 'general health questions', 'hospital location', 'visiting hours', 'how to book', 'departments available'],
+        blocked: ['patient records', 'other patients', 'medical diagnoses', 'prescriptions', 'lab results', 'staff information', 'financial data', 'system settings'],
+        description: 'You are assisting a regular patient/user. You can ONLY help with: booking appointments, general health information, hospital services, visiting hours, and directions. You MUST REFUSE any questions about other patients, medical records, diagnoses, prescriptions, lab results, staff details, billing details of others, or any internal hospital data. If asked about restricted topics, say: "I\'m sorry, I can\'t help with that. As a patient, I can only assist you with booking appointments and general hospital information."'
+      },
+      receptionist: {
+        allowed: ['appointments', 'patient registration', 'front office', 'queue management', 'visitor management', 'billing basics'],
+        blocked: ['medical diagnoses', 'prescriptions', 'lab results', 'clinical decisions', 'staff payroll', 'system settings'],
+        description: 'You are assisting a receptionist. You can help with: appointment scheduling, patient registration, front office operations, queue management, visitor management, and basic billing. You MUST REFUSE clinical questions (diagnoses, prescriptions, lab results) and internal admin settings.'
+      },
+      nurse: {
+        allowed: ['patient care', 'vitals', 'medication administration', 'nursing procedures', 'ward management', 'patient records for assigned patients'],
+        blocked: ['financial data', 'system settings', 'user management', 'payroll', 'unassigned patient records'],
+        description: 'You are assisting a nurse. You can help with: patient care, vital signs, medication administration, nursing procedures, and ward management. You MUST REFUSE questions about financial data, system administration, payroll, or patients not under nursing care.'
+      },
+      doctor: {
+        allowed: ['medical diagnoses', 'patient care', 'treatment plans', 'prescriptions', 'medical records', 'clinical decisions', 'lab results', 'procedures'],
+        blocked: ['financial management', 'system settings', 'user management', 'payroll', 'other doctors\' private notes'],
+        description: 'You are assisting a doctor. You can help with: medical diagnoses, patient care, treatment plans, prescriptions, medical records, and clinical decisions. You MUST REFUSE questions about financial management, system administration, or payroll.'
+      },
+      pharmacist: {
+        allowed: ['medications', 'drug interactions', 'prescriptions', 'pharmacy inventory', 'dosage information'],
+        blocked: ['patient medical history beyond prescriptions', 'financial data', 'system settings', 'clinical diagnoses'],
+        description: 'You are assisting a pharmacist. You can help with: medication management, drug interactions, prescription verification, and pharmacy inventory. You MUST REFUSE questions about full patient medical histories, financial data, or system administration.'
+      },
+      lab_technician: {
+        allowed: ['lab tests', 'specimen handling', 'test results', 'lab procedures', 'equipment'],
+        blocked: ['clinical diagnoses', 'prescriptions', 'financial data', 'system settings', 'patient personal details beyond test orders'],
+        description: 'You are assisting a lab technician. You can help with: lab tests, specimen handling, test results, and lab procedures. You MUST REFUSE questions about clinical diagnoses, prescriptions, financial data, or patient personal details beyond what is needed for tests.'
+      },
+      admin: {
+        allowed: ['staff management', 'reports', 'user management', 'hospital operations', 'departments', 'scheduling'],
+        blocked: ['system-level configuration', 'security settings', 'super admin functions'],
+        description: 'You are assisting an admin. You can help with: staff management, reports, user management, and hospital operations. You MUST REFUSE system-level configuration and security settings — those require super admin access.'
+      },
+      super_admin: {
+        allowed: ['everything'],
+        blocked: [],
+        description: 'You are assisting a super admin with full system access. You can help with any hospital management topic.'
+      },
+    };
+
+    const restriction = roleRestrictions[userRole] || roleRestrictions.user;
+
     try {
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -95,11 +140,18 @@ export function AIAssistant({ currentPage = 'dashboard', userRole = 'admin', isO
           messages: [
             { 
               role: 'system', 
-              content: `You are SmartCare AI Assistant for ${currentPage} page. User role: ${userRole}. Provide helpful, accurate medical and hospital management guidance.` 
+              content: `You are SmartCare AI Assistant. Current page: ${currentPage}. User role: ${userRole}.
+
+ROLE INSTRUCTIONS: ${restriction.description}
+
+BLOCKED TOPICS for this role: ${restriction.blocked.join(', ') || 'none'}.
+
+CRITICAL: You must strictly enforce these restrictions. Never reveal patient data, records, or information outside the user's role scope. If a user asks about blocked topics, politely decline and redirect them to what you CAN help with.` 
             },
+            ...messages.filter(m => m.role === 'user').slice(-6).map(m => ({ role: m.role, content: m.content })),
             { role: 'user', content: userMessage }
           ],
-          temperature: 0.7,
+          temperature: 0.5,
           max_tokens: 500,
         }),
       });
