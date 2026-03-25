@@ -46,6 +46,7 @@ import {
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { NewDashboard } from './NewDashboard';
+import { UserDashboard } from './UserDashboard';
 import { ReceptionistDashboard } from './ReceptionistDashboard';
 import { LabTechDashboard } from './LabTechDashboard';
 import { LabInvoiceGenerator } from './LabInvoiceGenerator';
@@ -170,7 +171,8 @@ export function MainApp({ session, supabase }: MainAppProps) {
       case 'dashboard': 
         return isSuperAdmin ? <AdminDashboard session={session} /> : 
                userRole === 'receptionist' ? <ReceptionistDashboard session={session} /> : 
-               userRole === 'lab_technician' ? <LabTechDashboard session={session} onNavigate={(tab) => setActiveTab(tab as TabType)} /> : 
+               userRole === 'lab_technician' ? <LabTechDashboard session={session} onNavigate={(tab) => setActiveTab(tab as TabType)} /> :
+               userRole === 'user' ? <UserDashboard session={session} /> :
                <NewDashboard session={session} />;
       case 'workflow': return <PatientWorkflowManagement session={session} />;
       case 'outpatient': return <OutpatientManagement session={session} />;
@@ -304,7 +306,12 @@ export function MainApp({ session, supabase }: MainAppProps) {
   ];
 
   // Use single menu for all users
-  const menuItems = isSuperAdmin ? superAdminMenuItems : regularMenuItems.filter((item) => item.roles.includes(userRole));
+  const menuItems = isSuperAdmin ? superAdminMenuItems : regularMenuItems.filter((item) => {
+    if (userRole === 'user') {
+      return ['dashboard', 'appointments', 'help'].includes(item.id);
+    }
+    return item.roles.includes(userRole);
+  });
 
   return (
     <div className="min-h-screen bg-background">
