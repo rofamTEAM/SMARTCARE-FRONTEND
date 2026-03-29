@@ -7,8 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-
-interface RadiologyTest {
+import { radiologyApi } from '../utils/api';
   id: string;
   patientId: string;
   patientName: string;
@@ -41,12 +40,10 @@ export function RadiologyManagement({ session }: RadiologyManagementProps) {
 
   const fetchTests = async () => {
     try {
-      const localTests = localStorage.getItem('hospital_radiology_tests');
-      if (localTests) {
-        setTests(JSON.parse(localTests));
-      }
+      const data = await radiologyApi.getAll();
+      setTests(data || []);
     } catch (error) {
-      console.error('Error fetching radiology tests:', error);
+      setTests([]);
     }
   };
 
@@ -64,22 +61,17 @@ export function RadiologyManagement({ session }: RadiologyManagementProps) {
 
     setLoading(true);
     try {
-      const newTest: RadiologyTest = {
-        id: Date.now().toString(),
-        patientId: Date.now().toString(),
-        patientName: formData.patientName || '',
-        testName: formData.testName || '',
+      const newTest = await radiologyApi.create({
+        patientName: formData.patientName,
+        testName: formData.testName,
         testType: formData.testType || 'X-Ray',
-        doctorName: formData.doctorName || '',
+        doctorName: formData.doctorName,
         testDate: formData.testDate || new Date().toISOString().split('T')[0],
         status: 'Scheduled',
         cost: formData.cost || 0,
         notes: formData.notes || ''
-      };
-
-      const updatedTests = [...tests, newTest];
-      setTests(updatedTests);
-      localStorage.setItem('hospital_radiology_tests', JSON.stringify(updatedTests));
+      });
+      setTests([...tests, newTest]);
       
       setFormData({});
       setIsAddModalOpen(false);
@@ -92,25 +84,19 @@ export function RadiologyManagement({ session }: RadiologyManagementProps) {
     }
   };
 
-  const handleStatusUpdate = (id: string, status: RadiologyTest['status']) => {
-    const updatedTests = tests.map(test => 
-      test.id === id ? { 
-        ...test, 
-        status, 
-        reportDate: status === 'Completed' ? new Date().toISOString().split('T')[0] : test.reportDate 
-      } : test
-    );
-    setTests(updatedTests);
-    localStorage.setItem('hospital_radiology_tests', JSON.stringify(updatedTests));
+  const handleStatusUpdate = async (id: string, status: RadiologyTest['status']) => {
+    const updated = await radiologyApi.update(id, {
+      status,
+      reportDate: status === 'Completed' ? new Date().toISOString().split('T')[0] : undefined
+    });
+    setTests(tests.map(t => t.id === id ? updated : t));
     toast.success('Test status updated successfully!');
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this test?')) return;
-    
-    const updatedTests = tests.filter(test => test.id !== id);
-    setTests(updatedTests);
-    localStorage.setItem('hospital_radiology_tests', JSON.stringify(updatedTests));
+    await radiologyApi.delete(id);
+    setTests(tests.filter(t => t.id !== id));
     toast.success('Test deleted successfully!');
   };
 

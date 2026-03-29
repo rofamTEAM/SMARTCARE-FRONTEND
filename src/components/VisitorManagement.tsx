@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
-import { DatabaseService } from '../utils/supabase/database';
+import { visitorsApi } from '../utils/api';
 
 
 interface Visitor {
@@ -38,12 +38,11 @@ export function VisitorManagement({ session, onUpdate }: VisitorManagementProps)
 
   const fetchVisitors = async () => {
     try {
-      const { data } = await DatabaseService.getVisitors();
-      setVisitors(data);
+      const data = await visitorsApi.getAll();
+      setVisitors(data || []);
       onUpdate?.();
     } catch (error) {
-      console.error('Error fetching visitors:', error);
-      toast.error('Failed to load visitors');
+      setVisitors([]);
     }
   };
 
@@ -61,24 +60,19 @@ export function VisitorManagement({ session, onUpdate }: VisitorManagementProps)
 
     setLoading(true);
     try {
-      const newVisitor: Visitor = {
-        id: Date.now().toString(),
-        visitorName: formData.visitorName || '',
-        phone: formData.phone || '',
-        patientName: formData.patientName || '',
+      const newVisitor = await visitorsApi.create({
+        visitorName: formData.visitorName,
+        phone: formData.phone,
+        patientName: formData.patientName,
         purpose: formData.purpose || '',
         status: 'Active',
         checkInTime: new Date().toISOString()
-      };
-
-      const { data } = await DatabaseService.createVisitor(newVisitor);
-      if (data) {
-        setVisitors([...visitors, data]);
-        setFormData({});
-        setIsAddModalOpen(false);
-        onUpdate?.();
-        toast.success('Visitor checked in successfully!');
-      }
+      });
+      setVisitors([...visitors, newVisitor]);
+      setFormData({});
+      setIsAddModalOpen(false);
+      onUpdate?.();
+      toast.success('Visitor checked in successfully!');
     } catch (error) {
       console.error('Error adding visitor:', error);
       toast.error('Failed to check in visitor');
@@ -89,18 +83,14 @@ export function VisitorManagement({ session, onUpdate }: VisitorManagementProps)
 
   const handleCheckOut = async (id: string) => {
     try {
-      const updatedVisitors = visitors.map(visitor => 
-        visitor.id === id ? { 
-          ...visitor, 
-          status: 'Checked-Out' as const,
-          checkOutTime: new Date().toISOString()
-        } : visitor
-      );
-      setVisitors(updatedVisitors);
+      const updated = await visitorsApi.update(id, {
+        status: 'Checked-Out',
+        checkOutTime: new Date().toISOString()
+      });
+      setVisitors(visitors.map(v => v.id === id ? updated : v));
       onUpdate?.();
       toast.success('Visitor checked out successfully!');
     } catch (error) {
-      console.error('Error checking out visitor:', error);
       toast.error('Failed to check out visitor');
     }
   };

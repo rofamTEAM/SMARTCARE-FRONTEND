@@ -7,8 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-
-interface PathologyTest {
+import { pathologyApi } from '../utils/api';
   id: string;
   patientId: string;
   patientName: string;
@@ -40,12 +39,10 @@ export function PathologyManagement({ session }: PathologyManagementProps) {
 
   const fetchTests = async () => {
     try {
-      const localTests = localStorage.getItem('hospital_pathology_tests');
-      if (localTests) {
-        setTests(JSON.parse(localTests));
-      }
+      const data = await pathologyApi.getAll();
+      setTests(data || []);
     } catch (error) {
-      console.error('Error fetching pathology tests:', error);
+      setTests([]);
     }
   };
 
@@ -63,22 +60,17 @@ export function PathologyManagement({ session }: PathologyManagementProps) {
 
     setLoading(true);
     try {
-      const newTest: PathologyTest = {
-        id: Date.now().toString(),
-        patientId: Date.now().toString(),
-        patientName: formData.patientName || '',
-        testName: formData.testName || '',
+      const newTest = await pathologyApi.create({
+        patientName: formData.patientName,
+        testName: formData.testName,
         testType: formData.testType || 'Blood Test',
-        doctorName: formData.doctorName || '',
+        doctorName: formData.doctorName,
         sampleDate: formData.sampleDate || new Date().toISOString().split('T')[0],
         status: 'Pending',
         cost: formData.cost || 0,
         notes: formData.notes || ''
-      };
-
-      const updatedTests = [...tests, newTest];
-      setTests(updatedTests);
-      localStorage.setItem('hospital_pathology_tests', JSON.stringify(updatedTests));
+      });
+      setTests([...tests, newTest]);
       
       setFormData({});
       setIsAddModalOpen(false);
@@ -91,21 +83,19 @@ export function PathologyManagement({ session }: PathologyManagementProps) {
     }
   };
 
-  const handleStatusUpdate = (id: string, status: PathologyTest['status']) => {
-    const updatedTests = tests.map(test => 
-      test.id === id ? { ...test, status, reportDate: status === 'Completed' ? new Date().toISOString().split('T')[0] : test.reportDate } : test
-    );
-    setTests(updatedTests);
-    localStorage.setItem('hospital_pathology_tests', JSON.stringify(updatedTests));
+  const handleStatusUpdate = async (id: string, status: PathologyTest['status']) => {
+    const updated = await pathologyApi.update(id, {
+      status,
+      reportDate: status === 'Completed' ? new Date().toISOString().split('T')[0] : undefined
+    });
+    setTests(tests.map(t => t.id === id ? updated : t));
     toast.success('Test status updated successfully!');
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this test?')) return;
-    
-    const updatedTests = tests.filter(test => test.id !== id);
-    setTests(updatedTests);
-    localStorage.setItem('hospital_pathology_tests', JSON.stringify(updatedTests));
+    await pathologyApi.delete(id);
+    setTests(tests.filter(t => t.id !== id));
     toast.success('Test deleted successfully!');
   };
 

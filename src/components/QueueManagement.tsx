@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
+import { appointmentsApi } from '../utils/api';
 
 
 interface QueueItem {
@@ -36,13 +37,11 @@ export function QueueManagement({ session, onUpdate }: QueueManagementProps) {
 
   const fetchQueue = async () => {
     try {
-      const localQueue = localStorage.getItem('hospital_queue');
-      if (localQueue) {
-        setQueue(JSON.parse(localQueue));
-      }
+      const data = await appointmentsApi.getAll('status=Waiting,In-Progress');
+      setQueue(data || []);
       onUpdate?.();
     } catch (error) {
-      console.error('Error fetching queue:', error);
+      setQueue([]);
     }
   };
 
@@ -63,21 +62,16 @@ export function QueueManagement({ session, onUpdate }: QueueManagementProps) {
 
     setLoading(true);
     try {
-      const newItem: QueueItem = {
-        id: Date.now().toString(),
-        patientName: formData.patientName || '',
+      const newItem = await appointmentsApi.create({
+        patientName: formData.patientName,
         tokenNumber: generateToken(),
-        department: formData.department || '',
-        doctorName: formData.doctorName || '',
+        department: formData.department,
+        doctorName: formData.doctorName,
         priority: formData.priority || 'Normal',
         status: 'Waiting',
         queueTime: new Date().toISOString()
-      };
-
-      const updatedQueue = [...queue, newItem];
-      setQueue(updatedQueue);
-      localStorage.setItem('hospital_queue', JSON.stringify(updatedQueue));
-      
+      });
+      setQueue([...queue, newItem]);
       setFormData({});
       setIsAddModalOpen(false);
       onUpdate?.();
@@ -90,11 +84,8 @@ export function QueueManagement({ session, onUpdate }: QueueManagementProps) {
 
   const handleStatusChange = async (id: string, status: QueueItem['status']) => {
     try {
-      const updatedQueue = queue.map(item => 
-        item.id === id ? { ...item, status } : item
-      );
-      setQueue(updatedQueue);
-      localStorage.setItem('hospital_queue', JSON.stringify(updatedQueue));
+      const updated = await appointmentsApi.update(id, { status });
+      setQueue(queue.map(item => item.id === id ? updated : item));
       onUpdate?.();
     } catch (error) {
       console.error('Error updating queue status:', error);

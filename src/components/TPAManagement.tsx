@@ -7,8 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-
-interface TPA {
+import { tpaApi } from '../utils/api';
   id: string;
   name: string;
   contactPerson: string;
@@ -41,12 +40,10 @@ export function TPAManagement({ session }: TPAManagementProps) {
 
   const fetchTPAs = async () => {
     try {
-      const localTPAs = localStorage.getItem('hospital_tpas');
-      if (localTPAs) {
-        setTpas(JSON.parse(localTPAs));
-      }
+      const data = await tpaApi.getAll();
+      setTpas(data || []);
     } catch (error) {
-      console.error('Error fetching TPAs:', error);
+      setTpas([]);
     }
   };
 
@@ -63,11 +60,10 @@ export function TPAManagement({ session }: TPAManagementProps) {
 
     setLoading(true);
     try {
-      const newTPA: TPA = {
-        id: Date.now().toString(),
-        name: formData.name || '',
-        contactPerson: formData.contactPerson || '',
-        phone: formData.phone || '',
+      const newTPA = await tpaApi.create({
+        name: formData.name,
+        contactPerson: formData.contactPerson,
+        phone: formData.phone,
         email: formData.email || '',
         address: formData.address || '',
         policyTypes: formData.policyTypes || [],
@@ -77,11 +73,8 @@ export function TPAManagement({ session }: TPAManagementProps) {
         contractStart: formData.contractStart || '',
         contractEnd: formData.contractEnd || '',
         commissionRate: formData.commissionRate || 0
-      };
-
-      const updatedTPAs = [...tpas, newTPA];
-      setTpas(updatedTPAs);
-      localStorage.setItem('hospital_tpas', JSON.stringify(updatedTPAs));
+      });
+      setTpas([...tpas, newTPA]);
       
       setFormData({});
       setIsAddModalOpen(false);
@@ -94,14 +87,11 @@ export function TPAManagement({ session }: TPAManagementProps) {
     }
   };
 
-  const handleStatusToggle = (id: string) => {
-    const updatedTPAs = tpas.map(tpa => 
-      tpa.id === id 
-        ? { ...tpa, status: tpa.status === 'Active' ? 'Inactive' as const : 'Active' as const }
-        : tpa
-    );
-    setTpas(updatedTPAs);
-    localStorage.setItem('hospital_tpas', JSON.stringify(updatedTPAs));
+  const handleStatusToggle = async (id: string) => {
+    const tpa = tpas.find(t => t.id === id);
+    if (!tpa) return;
+    const updated = await tpaApi.update(id, { status: tpa.status === 'Active' ? 'Inactive' : 'Active' });
+    setTpas(tpas.map(t => t.id === id ? updated : t));
     toast.success('TPA status updated successfully!');
   };
 

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-import { DatabaseService } from '../utils/supabase/database';
+import { staffApi } from '../utils/api';
 
 interface AttendanceRecord {
   id: string;
@@ -40,28 +40,19 @@ export function AttendanceManagement({ session }: AttendanceManagementProps) {
 
   const fetchAttendance = async () => {
     try {
-      const { data, error } = await DatabaseService.getAttendance();
-      if (error) throw error;
-      setAttendance(data.filter((record: AttendanceRecord) => record.date === selectedDate));
+      const data = await staffApi.getAll(`date=${selectedDate}`);
+      setAttendance(data.filter((r: any) => r.date === selectedDate));
     } catch (error) {
-      const localAttendance = localStorage.getItem('hospital_attendance');
-      if (localAttendance) {
-        const allAttendance = JSON.parse(localAttendance);
-        setAttendance(allAttendance.filter((record: AttendanceRecord) => record.date === selectedDate));
-      }
+      setAttendance([]);
     }
   };
 
   const fetchStaff = async () => {
     try {
-      const { data, error } = await DatabaseService.getStaff();
-      if (error) throw error;
-      setStaff(data);
+      const data = await staffApi.getAll();
+      setStaff(data || []);
     } catch (error) {
-      const localStaff = localStorage.getItem('hospital_staff');
-      if (localStaff) {
-        setStaff(JSON.parse(localStaff));
-      }
+      setStaff([]);
     }
   };
 
@@ -85,16 +76,7 @@ export function AttendanceManagement({ session }: AttendanceManagementProps) {
         workingHours: status === 'Present' ? 8 : status === 'Half Day' ? 4 : 0
       };
 
-      try {
-        await DatabaseService.createAttendance(newRecord);
-      } catch (error) {
-        console.error('Database error:', error);
-      }
-
-      const allAttendance = JSON.parse(localStorage.getItem('hospital_attendance') || '[]');
-      const updatedAttendance = [...allAttendance, newRecord];
-      localStorage.setItem('hospital_attendance', JSON.stringify(updatedAttendance));
-      
+      await staffApi.create({ ...newRecord, type: 'attendance' }).catch(() => {});
       setAttendance([...attendance, newRecord]);
       toast.success(`Attendance marked as ${status}`);
     } catch (error) {
@@ -102,31 +84,13 @@ export function AttendanceManagement({ session }: AttendanceManagementProps) {
     }
   };
 
-  const checkOut = (id: string) => {
-    const updatedAttendance = attendance.map(record => {
-      if (record.id === id && !record.checkOut) {
-        const checkOutTime = new Date().toLocaleTimeString();
-        const checkInTime = new Date(`1970-01-01 ${record.checkIn}`);
-        const checkOutTimeObj = new Date(`1970-01-01 ${checkOutTime}`);
-        const workingHours = (checkOutTimeObj.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
-        
-        return {
-          ...record,
-          checkOut: checkOutTime,
-          workingHours: Math.round(workingHours * 100) / 100
-        };
-      }
-      return record;
-    });
-    
-    setAttendance(updatedAttendance);
-    
-    const allAttendance = JSON.parse(localStorage.getItem('hospital_attendance') || '[]');
-    const updatedAllAttendance = allAttendance.map((record: AttendanceRecord) => 
-      updatedAttendance.find(updated => updated.id === record.id) || record
-    );
-    localStorage.setItem('hospital_attendance', JSON.stringify(updatedAllAttendance));
-    
+  const checkOut = async (id: string) => {
+    const record = attendance.find(r => r.id === id);
+    if (!record) return;
+    const checkOutTime = new Date().toLocaleTimeString();
+    const updated = { ...record, checkOut: checkOutTime };
+    await staffApi.update(id, { checkOut: checkOutTime, type: 'attendance' }).catch(() => {});
+    setAttendance(attendance.map(r => r.id === id ? updated : r));
     toast.success('Check-out recorded successfully');
   };
 

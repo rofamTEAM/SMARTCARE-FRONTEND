@@ -10,6 +10,8 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 
+import { bloodBankApi } from '../utils/api';
+
 interface BloodDonor {
   id: string;
   donor_name: string;
@@ -46,47 +48,9 @@ export function BloodBankManagement({ session }: BloodBankManagementProps) {
   const [showAddDonor, setShowAddDonor] = useState(false);
   const [showIssueBlood, setShowIssueBlood] = useState(false);
 
-  // Mock data - replace with actual API calls
   useEffect(() => {
-    setDonors([
-      {
-        id: '1',
-        donor_name: 'John Smith',
-        age: 28,
-        blood_group: 'O+',
-        gender: 'Male',
-        father_name: 'Robert Smith',
-        address: '123 Main St, City',
-        contact_no: '+1234567890',
-        last_donation: '2024-01-15',
-        total_donations: 5
-      },
-      {
-        id: '2',
-        donor_name: 'Sarah Johnson',
-        age: 32,
-        blood_group: 'A+',
-        gender: 'Female',
-        father_name: 'Michael Johnson',
-        address: '456 Oak Ave, City',
-        contact_no: '+1234567891',
-        last_donation: '2024-02-10',
-        total_donations: 3
-      }
-    ]);
-
-    setIssues([
-      {
-        id: '1',
-        bill_no: 'BB001',
-        date_of_issue: '2024-01-20',
-        patient_name: 'Alice Brown',
-        blood_group: 'O+',
-        doctor: 'Dr. Wilson',
-        amount: 150,
-        status: 'issued'
-      }
-    ]);
+    bloodBankApi.getDonors().then(setDonors).catch(() => {});
+    bloodBankApi.getAll().then(setIssues).catch(() => {});
   }, []);
 
   const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];

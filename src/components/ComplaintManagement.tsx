@@ -7,8 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-
-interface Complaint {
+import { complaintsApi } from '../utils/api';
   id: string;
   complaintBy: string;
   complaintType: string;
@@ -44,12 +43,10 @@ export function ComplaintManagement({ session }: ComplaintManagementProps) {
 
   const fetchComplaints = async () => {
     try {
-      const localComplaints = localStorage.getItem('hospital_complaints');
-      if (localComplaints) {
-        setComplaints(JSON.parse(localComplaints));
-      }
+      const data = await complaintsApi.getAll();
+      setComplaints(data || []);
     } catch (error) {
-      console.error('Error fetching complaints:', error);
+      setComplaints([]);
     }
   };
 
@@ -67,23 +64,18 @@ export function ComplaintManagement({ session }: ComplaintManagementProps) {
 
     setLoading(true);
     try {
-      const newComplaint: Complaint = {
-        id: Date.now().toString(),
-        complaintBy: formData.complaintBy || '',
-        complaintType: formData.complaintType || '',
+      const newComplaint = await complaintsApi.create({
+        complaintBy: formData.complaintBy,
+        complaintType: formData.complaintType,
         source: formData.source || 'Patient',
         phone: formData.phone || '',
         email: formData.email || '',
         date: formData.date || new Date().toISOString().split('T')[0],
-        description: formData.description || '',
+        description: formData.description,
         priority: formData.priority || 'Medium',
         status: 'Open',
-        createdAt: new Date().toISOString()
-      };
-
-      const updatedComplaints = [...complaints, newComplaint];
-      setComplaints(updatedComplaints);
-      localStorage.setItem('hospital_complaints', JSON.stringify(updatedComplaints));
+      });
+      setComplaints([...complaints, newComplaint]);
       
       setFormData({});
       setIsAddModalOpen(false);
@@ -96,21 +88,16 @@ export function ComplaintManagement({ session }: ComplaintManagementProps) {
     }
   };
 
-  const handleStatusUpdate = (id: string, status: Complaint['status']) => {
-    const updatedComplaints = complaints.map(complaint => 
-      complaint.id === id ? { ...complaint, status } : complaint
-    );
-    setComplaints(updatedComplaints);
-    localStorage.setItem('hospital_complaints', JSON.stringify(updatedComplaints));
+  const handleStatusUpdate = async (id: string, status: Complaint['status']) => {
+    const updated = await complaintsApi.update(id, { status });
+    setComplaints(complaints.map(c => c.id === id ? updated : c));
     toast.success('Complaint status updated successfully!');
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this complaint?')) return;
-    
-    const updatedComplaints = complaints.filter(complaint => complaint.id !== id);
-    setComplaints(updatedComplaints);
-    localStorage.setItem('hospital_complaints', JSON.stringify(updatedComplaints));
+    await complaintsApi.delete(id);
+    setComplaints(complaints.filter(c => c.id !== id));
     toast.success('Complaint deleted successfully!');
   };
 

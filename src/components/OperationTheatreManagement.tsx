@@ -7,8 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-
-interface Surgery {
+import { otApi } from '../utils/api';
   id: string;
   patientName: string;
   surgeonName: string;
@@ -33,10 +32,7 @@ export function OperationTheatreManagement({ session }: OperationTheatreManageme
   const [formData, setFormData] = useState<Partial<Surgery>>({});
 
   useEffect(() => {
-    const savedSurgeries = localStorage.getItem('hospital_surgeries');
-    if (savedSurgeries) {
-      setSurgeries(JSON.parse(savedSurgeries));
-    }
+    otApi.getAll().then(setSurgeries).catch(() => setSurgeries([]));
   }, []);
 
   const filteredSurgeries = surgeries.filter(surgery =>
@@ -51,11 +47,10 @@ export function OperationTheatreManagement({ session }: OperationTheatreManageme
       return;
     }
 
-    const newSurgery: Surgery = {
-      id: Date.now().toString(),
-      patientName: formData.patientName || '',
-      surgeonName: formData.surgeonName || '',
-      operationType: formData.operationType || '',
+    const newSurgery = await otApi.create({
+      patientName: formData.patientName,
+      surgeonName: formData.surgeonName,
+      operationType: formData.operationType,
       operationDate: formData.operationDate || new Date().toISOString().split('T')[0],
       operationTime: formData.operationTime || '09:00',
       otNumber: formData.otNumber || 'OT-1',
@@ -63,32 +58,24 @@ export function OperationTheatreManagement({ session }: OperationTheatreManageme
       duration: formData.duration || '2 hours',
       notes: formData.notes || '',
       amount: formData.amount || 0
-    };
-
-    const updatedSurgeries = [...surgeries, newSurgery];
-    setSurgeries(updatedSurgeries);
-    localStorage.setItem('hospital_surgeries', JSON.stringify(updatedSurgeries));
+    });
+    setSurgeries([...surgeries, newSurgery]);
     
     setFormData({});
     setIsAddModalOpen(false);
     toast.success('Surgery scheduled successfully!');
   };
 
-  const updateStatus = (id: string, status: Surgery['status']) => {
-    const updatedSurgeries = surgeries.map(surgery => 
-      surgery.id === id ? { ...surgery, status } : surgery
-    );
-    setSurgeries(updatedSurgeries);
-    localStorage.setItem('hospital_surgeries', JSON.stringify(updatedSurgeries));
+  const updateStatus = async (id: string, status: Surgery['status']) => {
+    const updated = await otApi.update(id, { status });
+    setSurgeries(surgeries.map(s => s.id === id ? updated : s));
     toast.success('Status updated successfully!');
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this surgery?')) return;
-    
-    const updatedSurgeries = surgeries.filter(surgery => surgery.id !== id);
-    setSurgeries(updatedSurgeries);
-    localStorage.setItem('hospital_surgeries', JSON.stringify(updatedSurgeries));
+    await otApi.delete(id);
+    setSurgeries(surgeries.filter(s => s.id !== id));
     toast.success('Surgery deleted successfully!');
   };
 

@@ -4,6 +4,7 @@ import { Search, User, Calendar, Phone, MapPin } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { patientsApi } from '../utils/api';
 
 interface Patient {
   id: string;
@@ -31,33 +32,31 @@ export function SearchPatients({ session }: SearchPatientsProps) {
     loadPatients();
   }, []);
 
-  const loadPatients = () => {
-    const savedPatients = localStorage.getItem('hospital_patients');
-    if (savedPatients) {
-      setAllPatients(JSON.parse(savedPatients));
+  const loadPatients = async () => {
+    try {
+      const data = await patientsApi.getAll();
+      setAllPatients(data || []);
+    } catch (error) {
+      setAllPatients([]);
     }
   };
 
-  const handleSearch = () => {
-    if (!searchTerm.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) { setSearchResults([]); return; }
     setLoading(true);
-    
-    // Simulate search delay
-    setTimeout(() => {
-      const results = allPatients.filter(patient =>
-        patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        patient.phone.includes(searchTerm) ||
-        patient.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        patient.id.toLowerCase().includes(searchTerm.toLowerCase())
+    try {
+      const results = await patientsApi.search(searchTerm);
+      setSearchResults(results || []);
+    } catch (error) {
+      const results = allPatients.filter(p =>
+        p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.phone?.includes(searchTerm) ||
+        p.email?.toLowerCase().includes(searchTerm.toLowerCase())
       );
-      
       setSearchResults(results);
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {

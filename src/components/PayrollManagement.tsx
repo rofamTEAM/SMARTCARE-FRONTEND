@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-import { DatabaseService } from '../utils/supabase/database';
+import { staffApi } from '../utils/api';
 
 interface PayrollRecord {
   id: string;
@@ -41,27 +41,19 @@ export function PayrollManagement({ session }: PayrollManagementProps) {
 
   const fetchPayrolls = async () => {
     try {
-      const { data, error } = await DatabaseService.getPayrolls();
-      if (error) throw error;
-      setPayrolls(data);
+      const data = await staffApi.getAll('type=payroll');
+      setPayrolls(data || []);
     } catch (error) {
-      const localPayrolls = localStorage.getItem('hospital_payrolls');
-      if (localPayrolls) {
-        setPayrolls(JSON.parse(localPayrolls));
-      }
+      setPayrolls([]);
     }
   };
 
   const fetchStaff = async () => {
     try {
-      const { data, error } = await DatabaseService.getStaff();
-      if (error) throw error;
-      setStaff(data);
+      const data = await staffApi.getAll();
+      setStaff(data || []);
     } catch (error) {
-      const localStaff = localStorage.getItem('hospital_staff');
-      if (localStaff) {
-        setStaff(JSON.parse(localStaff));
-      }
+      setStaff([]);
     }
   };
 
@@ -78,27 +70,18 @@ export function PayrollManagement({ session }: PayrollManagementProps) {
       const deductions = formData.deductions || 0;
       const netSalary = (formData.basicSalary || 0) + allowances - deductions;
 
-      const newPayroll: PayrollRecord = {
-        id: Date.now().toString(),
-        staffId: formData.staffId || '',
+      const newPayroll = await staffApi.create({
+        staffId: formData.staffId,
         staffName: selectedStaff?.name || '',
         basicSalary: formData.basicSalary || 0,
         allowances,
         deductions,
         netSalary,
-        payPeriod: formData.payPeriod || '',
-        status: 'Pending'
-      };
-
-      try {
-        await DatabaseService.createPayroll(newPayroll);
-      } catch (error) {
-        console.error('Database error:', error);
-      }
-
-      const updatedPayrolls = [...payrolls, newPayroll];
-      setPayrolls(updatedPayrolls);
-      localStorage.setItem('hospital_payrolls', JSON.stringify(updatedPayrolls));
+        payPeriod: formData.payPeriod,
+        status: 'Pending',
+        type: 'payroll'
+      });
+      setPayrolls([...payrolls, newPayroll]);
       
       setFormData({});
       setIsAddModalOpen(false);
@@ -110,12 +93,9 @@ export function PayrollManagement({ session }: PayrollManagementProps) {
     }
   };
 
-  const markAsPaid = (id: string) => {
-    const updatedPayrolls = payrolls.map(payroll => 
-      payroll.id === id ? { ...payroll, status: 'Paid' as const, payDate: new Date().toISOString().split('T')[0] } : payroll
-    );
-    setPayrolls(updatedPayrolls);
-    localStorage.setItem('hospital_payrolls', JSON.stringify(updatedPayrolls));
+  const markAsPaid = async (id: string) => {
+    const updated = await staffApi.update(id, { status: 'Paid', payDate: new Date().toISOString().split('T')[0], type: 'payroll' });
+    setPayrolls(payrolls.map(p => p.id === id ? updated : p));
     toast.success('Payroll marked as paid!');
   };
 
