@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { colorThemes, getCurrentTheme, setCurrentTheme, applyTheme } from '../utils/themeColors';
+import { settingsApi } from '../utils/api';
 
 interface HospitalSettings {
   hospitalName: string;
@@ -93,24 +94,21 @@ export function SystemSettings({ session }: SystemSettingsProps) {
     };
   }, []);
 
-  const loadSettings = () => {
+  const loadSettings = async () => {
     try {
-      const savedSettings = localStorage.getItem('hospital_settings');
-      if (savedSettings) {
-        setSettings({ ...settings, ...JSON.parse(savedSettings) });
-      }
+      const data = await settingsApi.get();
+      if (data?.general) setSettings(prev => ({ ...prev, ...data }));
     } catch (error) {
-      console.error('Error loading settings:', error);
+      // keep defaults
     }
   };
 
   const handleSave = async () => {
     setLoading(true);
     try {
-      localStorage.setItem('hospital_settings', JSON.stringify(settings));
+      await settingsApi.save({ general: settings });
       toast.success('Settings saved successfully!');
     } catch (error) {
-      console.error('Error saving settings:', error);
       toast.error('Failed to save settings. Please try again.');
     } finally {
       setLoading(false);

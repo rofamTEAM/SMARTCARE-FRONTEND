@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { toast } from 'sonner';
-
-interface ChargeCategory {
+import { chargesApi } from '../../utils/api';
+import { chargesApi } from '../../utils/api';
   id: string;
   name: string;
   description: string;
@@ -48,39 +48,21 @@ export function HospitalChargesSetup({ session }: HospitalChargesSetupProps) {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
-      const savedCategories = localStorage.getItem('hospital_charge_categories');
-      const savedCharges = localStorage.getItem('hospital_charges');
-      
-      if (savedCategories) {
-        setChargeCategories(JSON.parse(savedCategories));
-      }
-      if (savedCharges) {
-        setCharges(JSON.parse(savedCharges));
-      }
+      const [cats, chgs] = await Promise.allSettled([
+        chargesApi.getCategories(),
+        chargesApi.getAll(),
+      ]);
+      if (cats.status === 'fulfilled') setChargeCategories(cats.value || []);
+      if (chgs.status === 'fulfilled') setCharges(chgs.value || []);
     } catch (error) {
       console.error('Error loading data:', error);
     }
   };
 
-  const saveCategories = (updatedCategories: ChargeCategory[]) => {
-    try {
-      localStorage.setItem('hospital_charge_categories', JSON.stringify(updatedCategories));
-      setChargeCategories(updatedCategories);
-    } catch (error) {
-      console.error('Error saving categories:', error);
-    }
-  };
-
-  const saveCharges = (updatedCharges: Charge[]) => {
-    try {
-      localStorage.setItem('hospital_charges', JSON.stringify(updatedCharges));
-      setCharges(updatedCharges);
-    } catch (error) {
-      console.error('Error saving charges:', error);
-    }
-  };
+  const saveCategories = (updatedCategories: ChargeCategory[]) => { setChargeCategories(updatedCategories); };
+  const saveCharges = (updatedCharges: Charge[]) => { setCharges(updatedCharges); };
 
   const filteredCategories = chargeCategories.filter(category =>
     category.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { employeeService, Employee } from '../utils/supabase/client';
+import { staffApi } from '../utils/api';
 
 interface Doctor extends Employee {
   specialization?: string;
@@ -31,13 +32,10 @@ export function DoctorManagement() {
 
   const fetchDoctors = async () => {
     try {
-      const data = await employeeService.getAll();
-      const doctorData = data.filter(emp => emp.position === 'Doctor');
-      setDoctors(doctorData);
+      const data = await staffApi.getDoctors();
+      setDoctors(data || []);
     } catch (error) {
-      // Silent fallback to localStorage
-      const localData = localStorage.getItem('hospital_doctors');
-      setDoctors(localData ? JSON.parse(localData) : []);
+      setDoctors([]);
     }
   };
 
@@ -75,7 +73,7 @@ export function DoctorManagement() {
       };
 
       try {
-        const newDoctor = await employeeService.create({
+        const newDoctor = await staffApi.create({
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
@@ -83,15 +81,16 @@ export function DoctorManagement() {
           department: formData.department || '',
           salary: formData.salary,
           hire_date: new Date().toISOString().split('T')[0],
-          status: 'active'
+          status: 'active',
+          specialization: formData.specialization,
+          experience: formData.experience,
+          availability: formData.availability || 'Available',
+          license_number: formData.license_number,
+          consultation_fee: formData.consultation_fee,
         });
         doctorWithDetails.id = newDoctor.id;
       } catch (dbError) {
-        console.log('Database unavailable, using localStorage');
-        const localData = localStorage.getItem('hospital_doctors');
-        const localDoctors = localData ? JSON.parse(localData) : [];
-        localDoctors.push(doctorWithDetails);
-        localStorage.setItem('hospital_doctors', JSON.stringify(localDoctors));
+        console.error('Error saving doctor:', dbError);
       }
       
       setDoctors([...doctors, doctorWithDetails]);
@@ -131,22 +130,20 @@ export function DoctorManagement() {
       };
 
       try {
-        await employeeService.update(selectedDoctor.id, {
+        await staffApi.update(selectedDoctor.id, {
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
           department: formData.department,
-          salary: formData.salary
+          salary: formData.salary,
+          specialization: formData.specialization,
+          experience: formData.experience,
+          availability: formData.availability,
+          license_number: formData.license_number,
+          consultation_fee: formData.consultation_fee,
         });
       } catch (dbError) {
-        console.log('Database unavailable, using localStorage');
-        const localData = localStorage.getItem('hospital_doctors');
-        const localDoctors = localData ? JSON.parse(localData) : [];
-        const index = localDoctors.findIndex((d: Doctor) => d.id === selectedDoctor.id);
-        if (index !== -1) {
-          localDoctors[index] = doctorWithDetails;
-          localStorage.setItem('hospital_doctors', JSON.stringify(localDoctors));
-        }
+        console.error('Error updating doctor:', dbError);
       }
       
       setDoctors(doctors.map(d => d.id === selectedDoctor.id ? doctorWithDetails : d));
@@ -166,13 +163,9 @@ export function DoctorManagement() {
     if (!confirm('Are you sure you want to delete this doctor?')) return;
     
     try {
-      await employeeService.delete(id);
+      await staffApi.delete(id);
     } catch (dbError) {
-      console.log('Database unavailable, using localStorage');
-      const localData = localStorage.getItem('hospital_doctors');
-      const localDoctors = localData ? JSON.parse(localData) : [];
-      const filtered = localDoctors.filter((d: Doctor) => d.id !== id);
-      localStorage.setItem('hospital_doctors', JSON.stringify(filtered));
+      console.error('Error deleting doctor:', dbError);
     }
     setDoctors(doctors.filter(d => d.id !== id));
     toast.success('Doctor deleted successfully!');

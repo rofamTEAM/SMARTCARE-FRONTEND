@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { toast } from 'sonner';
-
-interface Patient {
+import { patientsApi } from '../../utils/api';
+import { patientsApi } from '../../utils/api';
   id: string;
   name: string;
   email: string;
@@ -45,25 +45,16 @@ export function PatientSetup({ session }: PatientSetupProps) {
     loadPatients();
   }, []);
 
-  const loadPatients = () => {
+  const loadPatients = async () => {
     try {
-      const savedPatients = localStorage.getItem('setup_patients');
-      if (savedPatients) {
-        setPatients(JSON.parse(savedPatients));
-      }
+      const data = await patientsApi.getAll();
+      setPatients(data || []);
     } catch (error) {
-      console.error('Error loading patients:', error);
+      setPatients([]);
     }
   };
 
-  const savePatients = (updatedPatients: Patient[]) => {
-    try {
-      localStorage.setItem('setup_patients', JSON.stringify(updatedPatients));
-      setPatients(updatedPatients);
-    } catch (error) {
-      console.error('Error saving patients:', error);
-    }
-  };
+  const savePatients = (updatedPatients: Patient[]) => { setPatients(updatedPatients); };
 
   const filteredPatients = patients.filter(patient => {
     const matchesSearch = patient.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||

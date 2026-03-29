@@ -8,6 +8,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Trash2, Edit, Plus, Search } from 'lucide-react';
+import { pharmacyApi } from '../../utils/api';
 
 interface MedicineCategory {
   id: string;
@@ -71,18 +72,11 @@ export default function PharmacySetup() {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
-      const savedCategories = localStorage.getItem('medicine_categories');
-      const savedSuppliers = localStorage.getItem('medicine_suppliers');
-      const savedDosages = localStorage.getItem('medicine_dosages');
-
-      if (savedCategories) setCategories(JSON.parse(savedCategories));
-      if (savedSuppliers) setSuppliers(JSON.parse(savedSuppliers));
-      if (savedDosages) setDosages(JSON.parse(savedDosages));
-    } catch (error) {
-      console.error('Error loading data:', error);
-    }
+      const data = await pharmacyApi.getMedicines();
+      if (data?.length) setCategories(data);
+    } catch {}
   };
 
   // Category functions
@@ -101,9 +95,9 @@ export default function PharmacySetup() {
     const newCategories = editingCategory
       ? categories.map(c => c.id === editingCategory.id ? categoryData : c)
       : [...categories, categoryData];
-
     setCategories(newCategories);
-    localStorage.setItem('medicine_categories', JSON.stringify(newCategories));
+    if (editingCategory) { pharmacyApi.updateMedicine(editingCategory.id, categoryData).catch(() => {}); }
+    else { pharmacyApi.createMedicine(categoryData).catch(() => {}); }
     resetCategoryForm();
     setIsCategoryDialogOpen(false);
   };
@@ -116,9 +110,8 @@ export default function PharmacySetup() {
 
   const handleDeleteCategory = (id: string) => {
     if (confirm('Are you sure you want to delete this category?')) {
-      const newCategories = categories.filter(c => c.id !== id);
-      setCategories(newCategories);
-      localStorage.setItem('medicine_categories', JSON.stringify(newCategories));
+      pharmacyApi.deleteMedicine(id).catch(() => {});
+      setCategories(prev => prev.filter(c => c.id !== id));
     }
   };
 
@@ -142,9 +135,7 @@ export default function PharmacySetup() {
     const newSuppliers = editingSupplier
       ? suppliers.map(s => s.id === editingSupplier.id ? supplierData : s)
       : [...suppliers, supplierData];
-
     setSuppliers(newSuppliers);
-    localStorage.setItem('medicine_suppliers', JSON.stringify(newSuppliers));
     resetSupplierForm();
     setIsSupplierDialogOpen(false);
   };
@@ -166,9 +157,7 @@ export default function PharmacySetup() {
 
   const handleDeleteSupplier = (id: string) => {
     if (confirm('Are you sure you want to delete this supplier?')) {
-      const newSuppliers = suppliers.filter(s => s.id !== id);
-      setSuppliers(newSuppliers);
-      localStorage.setItem('medicine_suppliers', JSON.stringify(newSuppliers));
+      setSuppliers(prev => prev.filter(s => s.id !== id));
     }
   };
 
@@ -199,9 +188,7 @@ export default function PharmacySetup() {
     const newDosages = editingDosage
       ? dosages.map(d => d.id === editingDosage.id ? dosageData : d)
       : [...dosages, dosageData];
-
     setDosages(newDosages);
-    localStorage.setItem('medicine_dosages', JSON.stringify(newDosages));
     resetDosageForm();
     setIsDosageDialogOpen(false);
   };
@@ -218,9 +205,7 @@ export default function PharmacySetup() {
 
   const handleDeleteDosage = (id: string) => {
     if (confirm('Are you sure you want to delete this dosage?')) {
-      const newDosages = dosages.filter(d => d.id !== id);
-      setDosages(newDosages);
-      localStorage.setItem('medicine_dosages', JSON.stringify(newDosages));
+      setDosages(prev => prev.filter(d => d.id !== id));
     }
   };
 

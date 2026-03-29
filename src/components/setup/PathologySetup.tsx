@@ -6,6 +6,7 @@ import { Textarea } from '../ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Trash2, Edit, Plus, Search, TestTube } from 'lucide-react';
+import { pathologyApi } from '../../utils/api';
 
 interface PathologyCategory {
   id: string;
@@ -29,66 +30,21 @@ export default function PathologySetup() {
     loadCategories();
   }, []);
 
-  const loadCategories = () => {
+  const loadCategories = async () => {
     try {
-      const saved = localStorage.getItem('pathology_categories');
-      if (saved) {
-        setCategories(JSON.parse(saved));
-      } else {
-        // Initialize with some default categories
-        const defaultCategories: PathologyCategory[] = [
-          {
-            id: '1',
-            name: 'Hematology',
-            description: 'Blood tests and related examinations',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '2',
-            name: 'Clinical Chemistry',
-            description: 'Biochemical analysis of blood and other body fluids',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '3',
-            name: 'Microbiology',
-            description: 'Detection and identification of microorganisms',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '4',
-            name: 'Immunology',
-            description: 'Immune system related tests',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '5',
-            name: 'Histopathology',
-            description: 'Microscopic examination of tissue samples',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          }
-        ];
-        setCategories(defaultCategories);
-        localStorage.setItem('pathology_categories', JSON.stringify(defaultCategories));
-      }
-    } catch (error) {
-      console.error('Error loading categories:', error);
-    }
+      const data = await pathologyApi.getCategories();
+      if (data?.length) { setCategories(data); return; }
+    } catch {}
+    setCategories([
+      { id: '1', name: 'Hematology', description: 'Blood tests and related examinations', isActive: true, createdAt: new Date().toISOString() },
+      { id: '2', name: 'Clinical Chemistry', description: 'Biochemical analysis of blood and other body fluids', isActive: true, createdAt: new Date().toISOString() },
+      { id: '3', name: 'Microbiology', description: 'Detection and identification of microorganisms', isActive: true, createdAt: new Date().toISOString() },
+      { id: '4', name: 'Immunology', description: 'Immune system related tests', isActive: true, createdAt: new Date().toISOString() },
+      { id: '5', name: 'Histopathology', description: 'Microscopic examination of tissue samples', isActive: true, createdAt: new Date().toISOString() },
+    ]);
   };
 
-  const saveCategories = (newCategories: PathologyCategory[]) => {
-    try {
-      localStorage.setItem('pathology_categories', JSON.stringify(newCategories));
-      setCategories(newCategories);
-    } catch (error) {
-      console.error('Error saving categories:', error);
-    }
-  };
+  const saveCategories = (newCategories: PathologyCategory[]) => { setCategories(newCategories); };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

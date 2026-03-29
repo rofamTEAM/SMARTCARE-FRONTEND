@@ -6,6 +6,7 @@ import { Textarea } from '../ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Trash2, Edit, Plus, Search, Zap } from 'lucide-react';
+import { radiologyApi } from '../../utils/api';
 
 interface RadiologyCategory {
   id: string;
@@ -29,73 +30,22 @@ export default function RadiologySetup() {
     loadCategories();
   }, []);
 
-  const loadCategories = () => {
+  const loadCategories = async () => {
     try {
-      const saved = localStorage.getItem('radiology_categories');
-      if (saved) {
-        setCategories(JSON.parse(saved));
-      } else {
-        // Initialize with some default categories
-        const defaultCategories: RadiologyCategory[] = [
-          {
-            id: '1',
-            name: 'X-Ray',
-            description: 'Plain radiography examinations',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '2',
-            name: 'CT Scan',
-            description: 'Computed Tomography scans',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '3',
-            name: 'MRI',
-            description: 'Magnetic Resonance Imaging',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '4',
-            name: 'Ultrasound',
-            description: 'Ultrasonography examinations',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '5',
-            name: 'Mammography',
-            description: 'Breast imaging examinations',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '6',
-            name: 'Fluoroscopy',
-            description: 'Real-time X-ray imaging',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          }
-        ];
-        setCategories(defaultCategories);
-        localStorage.setItem('radiology_categories', JSON.stringify(defaultCategories));
-      }
-    } catch (error) {
-      console.error('Error loading categories:', error);
-    }
+      const data = await radiologyApi.getCategories();
+      if (data?.length) { setCategories(data); return; }
+    } catch {}
+    setCategories([
+      { id: '1', name: 'X-Ray', description: 'Plain radiography examinations', isActive: true, createdAt: new Date().toISOString() },
+      { id: '2', name: 'CT Scan', description: 'Computed Tomography scans', isActive: true, createdAt: new Date().toISOString() },
+      { id: '3', name: 'MRI', description: 'Magnetic Resonance Imaging', isActive: true, createdAt: new Date().toISOString() },
+      { id: '4', name: 'Ultrasound', description: 'Ultrasonography examinations', isActive: true, createdAt: new Date().toISOString() },
+      { id: '5', name: 'Mammography', description: 'Breast imaging examinations', isActive: true, createdAt: new Date().toISOString() },
+      { id: '6', name: 'Fluoroscopy', description: 'Real-time X-ray imaging', isActive: true, createdAt: new Date().toISOString() },
+    ]);
   };
 
-  const saveCategories = (newCategories: RadiologyCategory[]) => {
-    try {
-      localStorage.setItem('radiology_categories', JSON.stringify(newCategories));
-      setCategories(newCategories);
-    } catch (error) {
-      console.error('Error saving categories:', error);
-    }
-  };
+  const saveCategories = (newCategories: RadiologyCategory[]) => { setCategories(newCategories); };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

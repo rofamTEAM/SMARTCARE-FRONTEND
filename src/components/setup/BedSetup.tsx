@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { toast } from 'sonner';
+import { bedsApi } from '../../utils/api';
 
 interface Floor {
   id: string;
@@ -58,41 +59,27 @@ export function BedSetup({ session }: BedSetupProps) {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
-      const savedFloors = localStorage.getItem('bed_floors');
-      const savedBedGroups = localStorage.getItem('bed_groups');
-      const savedBedTypes = localStorage.getItem('bed_types');
-      const savedBeds = localStorage.getItem('beds');
-      
-      if (savedFloors) setFloors(JSON.parse(savedFloors));
-      if (savedBedGroups) setBedGroups(JSON.parse(savedBedGroups));
-      if (savedBedTypes) setBedTypes(JSON.parse(savedBedTypes));
-      if (savedBeds) setBeds(JSON.parse(savedBeds));
+      const [floorsData, groupsData, typesData, bedsData] = await Promise.allSettled([
+        bedsApi.getBeds().then(() => bedsApi.getBeds()),
+        bedsApi.getBedGroups(),
+        bedsApi.getBedTypes(),
+        bedsApi.getBeds(),
+      ]);
+      if (floorsData.status === 'fulfilled') setFloors(floorsData.value || []);
+      if (groupsData.status === 'fulfilled') setBedGroups(groupsData.value || []);
+      if (typesData.status === 'fulfilled') setBedTypes(typesData.value || []);
+      if (bedsData.status === 'fulfilled') setBeds(bedsData.value || []);
     } catch (error) {
       console.error('Error loading data:', error);
     }
   };
 
-  const saveFloors = (updatedFloors: Floor[]) => {
-    localStorage.setItem('bed_floors', JSON.stringify(updatedFloors));
-    setFloors(updatedFloors);
-  };
-
-  const saveBedGroups = (updatedBedGroups: BedGroup[]) => {
-    localStorage.setItem('bed_groups', JSON.stringify(updatedBedGroups));
-    setBedGroups(updatedBedGroups);
-  };
-
-  const saveBedTypes = (updatedBedTypes: BedType[]) => {
-    localStorage.setItem('bed_types', JSON.stringify(updatedBedTypes));
-    setBedTypes(updatedBedTypes);
-  };
-
-  const saveBeds = (updatedBeds: BedItem[]) => {
-    localStorage.setItem('beds', JSON.stringify(updatedBeds));
-    setBeds(updatedBeds);
-  };
+  const saveFloors = async (updatedFloors: Floor[]) => { setFloors(updatedFloors); };
+  const saveBedGroups = async (updatedBedGroups: BedGroup[]) => { setBedGroups(updatedBedGroups); };
+  const saveBedTypes = async (updatedBedTypes: BedType[]) => { setBedTypes(updatedBedTypes); };
+  const saveBeds = async (updatedBeds: BedItem[]) => { setBeds(updatedBeds); };
 
   const handleAdd = () => {
     if (!formData.name) {

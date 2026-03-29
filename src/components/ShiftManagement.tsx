@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-
-interface Shift {
+import { staffApi } from '../utils/api';
+import { staffApi } from '../utils/api';
   id: string;
   name: string;
   startTime: string;
@@ -42,25 +42,24 @@ export function ShiftManagement({ session }: { session: any }) {
     fetchData();
   }, []);
 
-  const fetchData = () => {
-    const localShifts = localStorage.getItem('hospital_shifts');
-    const localAssignments = localStorage.getItem('hospital_shift_assignments');
-    const localStaff = localStorage.getItem('hospital_staff');
-
-    if (localShifts) {
-      setShifts(JSON.parse(localShifts));
-    } else {
+  const fetchData = async () => {
+    try {
+      const [shiftsData, assignmentsData, staffData] = await Promise.allSettled([
+        staffApi.getAll('type=shifts'),
+        staffApi.getAll('type=shift_assignments'),
+        staffApi.getAll(),
+      ]);
       const defaultShifts: Shift[] = [
         { id: '1', name: 'Morning Shift', startTime: '06:00', endTime: '14:00', department: 'General', maxStaff: 10, assignedStaff: [] },
         { id: '2', name: 'Evening Shift', startTime: '14:00', endTime: '22:00', department: 'General', maxStaff: 8, assignedStaff: [] },
         { id: '3', name: 'Night Shift', startTime: '22:00', endTime: '06:00', department: 'General', maxStaff: 6, assignedStaff: [] }
       ];
-      setShifts(defaultShifts);
-      localStorage.setItem('hospital_shifts', JSON.stringify(defaultShifts));
+      setShifts(shiftsData.status === 'fulfilled' && shiftsData.value?.length ? shiftsData.value : defaultShifts);
+      if (assignmentsData.status === 'fulfilled') setAssignments(assignmentsData.value || []);
+      if (staffData.status === 'fulfilled') setStaff(staffData.value || []);
+    } catch (error) {
+      setShifts([]); setAssignments([]); setStaff([]);
     }
-
-    if (localAssignments) setAssignments(JSON.parse(localAssignments));
-    if (localStaff) setStaff(JSON.parse(localStaff));
   };
 
   const handleAddShift = () => {
@@ -81,7 +80,7 @@ export function ShiftManagement({ session }: { session: any }) {
 
     const updatedShifts = [...shifts, newShift];
     setShifts(updatedShifts);
-    localStorage.setItem('hospital_shifts', JSON.stringify(updatedShifts));
+    await staffApi.create({ ...newShift, type: 'shift' }).catch(() => {});
     
     setShiftFormData({});
     setIsAddShiftOpen(false);
@@ -109,7 +108,7 @@ export function ShiftManagement({ session }: { session: any }) {
 
     const updatedAssignments = [...assignments, newAssignment];
     setAssignments(updatedAssignments);
-    localStorage.setItem('hospital_shift_assignments', JSON.stringify(updatedAssignments));
+    await staffApi.create({ ...newAssignment, type: 'shift_assignment' }).catch(() => {});
     
     setAssignFormData({});
     setIsAssignOpen(false);
@@ -117,14 +116,11 @@ export function ShiftManagement({ session }: { session: any }) {
   };
 
   const handleSwapRequest = (assignmentId: string) => {
-    const updatedAssignments = assignments.map(assignment =>
-      assignment.id === assignmentId
-        ? { ...assignment, status: 'Swap Requested' as const }
-        : assignment
+    const updatedAssignments = assignments.map(a =>
+      a.id === assignmentId ? { ...a, status: 'Swap Requested' as const } : a
     );
-    
     setAssignments(updatedAssignments);
-    localStorage.setItem('hospital_shift_assignments', JSON.stringify(updatedAssignments));
+    await staffApi.update(assignmentId, { status: 'Swap Requested', type: 'shift_assignment' }).catch(() => {});
     toast.success('Swap request submitted!');
   };
 

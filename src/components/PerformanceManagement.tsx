@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-
-interface PerformanceReview {
+import { staffApi } from '../utils/api';
+import { staffApi } from '../utils/api';
   id: string;
   staffId: string;
   staffName: string;
@@ -56,14 +56,19 @@ export function PerformanceManagement({ session }: { session: any }) {
     fetchData();
   }, []);
 
-  const fetchData = () => {
-    const localReviews = localStorage.getItem('hospital_performance_reviews');
-    const localGoals = localStorage.getItem('hospital_goals');
-    const localStaff = localStorage.getItem('hospital_staff');
-
-    if (localReviews) setReviews(JSON.parse(localReviews));
-    if (localGoals) setGoals(JSON.parse(localGoals));
-    if (localStaff) setStaff(JSON.parse(localStaff));
+  const fetchData = async () => {
+    try {
+      const [reviewsData, goalsData, staffData] = await Promise.allSettled([
+        staffApi.getAll('type=performance_reviews'),
+        staffApi.getAll('type=goals'),
+        staffApi.getAll(),
+      ]);
+      if (reviewsData.status === 'fulfilled') setReviews(reviewsData.value || []);
+      if (goalsData.status === 'fulfilled') setGoals(goalsData.value || []);
+      if (staffData.status === 'fulfilled') setStaff(staffData.value || []);
+    } catch (error) {
+      setReviews([]); setGoals([]); setStaff([]);
+    }
   };
 
   const handleAddReview = () => {
@@ -100,7 +105,7 @@ export function PerformanceManagement({ session }: { session: any }) {
 
     const updatedReviews = [...reviews, newReview];
     setReviews(updatedReviews);
-    localStorage.setItem('hospital_performance_reviews', JSON.stringify(updatedReviews));
+    await staffApi.create({ ...newReview, type: 'performance_review' }).catch(() => {});
     
     setReviewFormData({});
     setIsReviewModalOpen(false);
@@ -128,7 +133,7 @@ export function PerformanceManagement({ session }: { session: any }) {
 
     const updatedGoals = [...goals, newGoal];
     setGoals(updatedGoals);
-    localStorage.setItem('hospital_goals', JSON.stringify(updatedGoals));
+    await staffApi.create({ ...newGoal, type: 'goal' }).catch(() => {});
     
     setGoalFormData({});
     setIsGoalModalOpen(false);
@@ -139,9 +144,8 @@ export function PerformanceManagement({ session }: { session: any }) {
     const updatedGoals = goals.map(goal =>
       goal.id === goalId ? { ...goal, progress, status } : goal
     );
-    
     setGoals(updatedGoals);
-    localStorage.setItem('hospital_goals', JSON.stringify(updatedGoals));
+    await staffApi.update(goalId, { progress, status, type: 'goal' }).catch(() => {});
     toast.success('Goal progress updated!');
   };
 

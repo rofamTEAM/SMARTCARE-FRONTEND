@@ -183,12 +183,7 @@ export function SuperAdminSettingsPage() {
       const loadedSettings = await SettingsService.getSettings();
       setSettings({ ...defaultSettings, ...loadedSettings });
     } catch (error) {
-      console.error('Error loading settings:', error);
-      // Fallback to localStorage
-      const saved = localStorage.getItem('superadmin_settings');
-      if (saved) {
-        setSettings({ ...defaultSettings, ...JSON.parse(saved) });
-      }
+      // keep defaults
     }
   };
 
@@ -196,7 +191,6 @@ export function SuperAdminSettingsPage() {
     setLoading(true);
     try {
       await SettingsService.saveSettings(settings);
-      localStorage.setItem('superadmin_settings', JSON.stringify(settings));
       toast.success('Settings saved successfully!');
     } catch (error) {
       toast.error('Failed to save settings');

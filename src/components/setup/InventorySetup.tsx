@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Trash2, Edit, Plus, Search, Package, Store, Truck } from 'lucide-react';
+import { inventoryApi } from '../../utils/api';
 
 interface ItemCategory {
   id: string;
@@ -65,58 +66,27 @@ export default function InventorySetup() {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
-      const savedCategories = localStorage.getItem('item_categories');
-      const savedStores = localStorage.getItem('item_stores');
-      const savedSuppliers = localStorage.getItem('item_suppliers');
-
-      if (savedCategories) {
-        setCategories(JSON.parse(savedCategories));
-      } else {
-        const defaultCategories: ItemCategory[] = [
-          { id: '1', itemCategory: 'Medical Equipment', description: 'Medical devices and equipment', isActive: true, createdAt: new Date().toISOString() },
-          { id: '2', itemCategory: 'Office Supplies', description: 'General office supplies and stationery', isActive: true, createdAt: new Date().toISOString() },
-          { id: '3', itemCategory: 'Cleaning Supplies', description: 'Cleaning and maintenance supplies', isActive: true, createdAt: new Date().toISOString() },
-          { id: '4', itemCategory: 'IT Equipment', description: 'Computer and IT related equipment', isActive: true, createdAt: new Date().toISOString() }
-        ];
-        setCategories(defaultCategories);
-        localStorage.setItem('item_categories', JSON.stringify(defaultCategories));
-      }
-
-      if (savedStores) {
-        setStores(JSON.parse(savedStores));
-      } else {
-        const defaultStores: ItemStore[] = [
-          { id: '1', itemStore: 'Main Store', code: 'MS001', description: 'Primary storage facility', isActive: true, createdAt: new Date().toISOString() },
-          { id: '2', itemStore: 'Medical Store', code: 'MED001', description: 'Medical equipment storage', isActive: true, createdAt: new Date().toISOString() },
-          { id: '3', itemStore: 'IT Store', code: 'IT001', description: 'IT equipment storage', isActive: true, createdAt: new Date().toISOString() }
-        ];
-        setStores(defaultStores);
-        localStorage.setItem('item_stores', JSON.stringify(defaultStores));
-      }
-
-      if (savedSuppliers) {
-        setSuppliers(JSON.parse(savedSuppliers));
-      } else {
-        const defaultSuppliers: ItemSupplier[] = [
-          {
-            id: '1',
-            itemSupplier: 'MedTech Solutions',
-            phone: '+1-555-0101',
-            email: 'contact@medtech.com',
-            address: '123 Medical Ave, Healthcare City',
-            contactPersonName: 'John Smith',
-            contactPersonPhone: '+1-555-0102',
-            contactPersonEmail: 'john@medtech.com',
-            description: 'Medical equipment supplier',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          }
-        ];
-        setSuppliers(defaultSuppliers);
-        localStorage.setItem('item_suppliers', JSON.stringify(defaultSuppliers));
-      }
+      const [catsData, storesData, suppliersData] = await Promise.allSettled([
+        inventoryApi.getCategories(),
+        inventoryApi.getStores(),
+        inventoryApi.getSuppliers(),
+      ]);
+      if (catsData.status === 'fulfilled' && catsData.value?.length) setCategories(catsData.value);
+      else setCategories([
+        { id: '1', itemCategory: 'Medical Equipment', description: 'Medical devices and equipment', isActive: true, createdAt: new Date().toISOString() },
+        { id: '2', itemCategory: 'Office Supplies', description: 'General office supplies', isActive: true, createdAt: new Date().toISOString() },
+        { id: '3', itemCategory: 'Cleaning Supplies', description: 'Cleaning and maintenance supplies', isActive: true, createdAt: new Date().toISOString() },
+        { id: '4', itemCategory: 'IT Equipment', description: 'Computer and IT related equipment', isActive: true, createdAt: new Date().toISOString() },
+      ]);
+      if (storesData.status === 'fulfilled' && storesData.value?.length) setStores(storesData.value);
+      else setStores([
+        { id: '1', itemStore: 'Main Store', code: 'MS001', description: 'Primary storage facility', isActive: true, createdAt: new Date().toISOString() },
+        { id: '2', itemStore: 'Medical Store', code: 'MED001', description: 'Medical equipment storage', isActive: true, createdAt: new Date().toISOString() },
+      ]);
+      if (suppliersData.status === 'fulfilled' && suppliersData.value?.length) setSuppliers(suppliersData.value);
+      else setSuppliers([]);
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -137,9 +107,9 @@ export default function InventorySetup() {
     const newCategories = editingCategory
       ? categories.map(c => c.id === editingCategory.id ? categoryData : c)
       : [...categories, categoryData];
-
     setCategories(newCategories);
-    localStorage.setItem('item_categories', JSON.stringify(newCategories));
+    if (editingCategory) { inventoryApi.update(editingCategory.id, categoryData).catch(() => {}); }
+    else { inventoryApi.create(categoryData).catch(() => {}); }
     resetCategoryForm();
     setIsCategoryDialogOpen(false);
   };
@@ -160,9 +130,9 @@ export default function InventorySetup() {
     const newStores = editingStore
       ? stores.map(s => s.id === editingStore.id ? storeData : s)
       : [...stores, storeData];
-
     setStores(newStores);
-    localStorage.setItem('item_stores', JSON.stringify(newStores));
+    if (editingStore) { inventoryApi.update(editingStore.id, storeData).catch(() => {}); }
+    else { inventoryApi.create(storeData).catch(() => {}); }
     resetStoreForm();
     setIsStoreDialogOpen(false);
   };
@@ -182,9 +152,9 @@ export default function InventorySetup() {
     const newSuppliers = editingSupplier
       ? suppliers.map(s => s.id === editingSupplier.id ? supplierData : s)
       : [...suppliers, supplierData];
-
     setSuppliers(newSuppliers);
-    localStorage.setItem('item_suppliers', JSON.stringify(newSuppliers));
+    if (editingSupplier) { inventoryApi.update(editingSupplier.id, supplierData).catch(() => {}); }
+    else { inventoryApi.create(supplierData).catch(() => {}); }
     resetSupplierForm();
     setIsSupplierDialogOpen(false);
   };
@@ -350,9 +320,8 @@ export default function InventorySetup() {
                         size="sm"
                         onClick={() => {
                           if (confirm('Are you sure?')) {
-                            const newCategories = categories.filter(c => c.id !== category.id);
-                            setCategories(newCategories);
-                            localStorage.setItem('item_categories', JSON.stringify(newCategories));
+                            inventoryApi.delete(category.id).catch(() => {});
+                            setCategories(prev => prev.filter(c => c.id !== category.id));
                           }
                         }}
                         className="text-red-600 hover:text-red-700"
@@ -458,9 +427,8 @@ export default function InventorySetup() {
                         size="sm"
                         onClick={() => {
                           if (confirm('Are you sure?')) {
-                            const newStores = stores.filter(s => s.id !== store.id);
-                            setStores(newStores);
-                            localStorage.setItem('item_stores', JSON.stringify(newStores));
+                            inventoryApi.delete(store.id).catch(() => {});
+                            setStores(prev => prev.filter(s => s.id !== store.id));
                           }
                         }}
                         className="text-red-600 hover:text-red-700"
@@ -624,9 +592,8 @@ export default function InventorySetup() {
                         size="sm"
                         onClick={() => {
                           if (confirm('Are you sure?')) {
-                            const newSuppliers = suppliers.filter(s => s.id !== supplier.id);
-                            setSuppliers(newSuppliers);
-                            localStorage.setItem('item_suppliers', JSON.stringify(newSuppliers));
+                            inventoryApi.delete(supplier.id).catch(() => {});
+                            setSuppliers(prev => prev.filter(s => s.id !== supplier.id));
                           }
                         }}
                         className="text-red-600 hover:text-red-700"

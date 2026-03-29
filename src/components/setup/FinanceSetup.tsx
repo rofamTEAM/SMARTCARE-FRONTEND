@@ -7,255 +7,127 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Trash2, Edit, Plus, Search, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
+import { financeApi } from '../../utils/api';
 
-interface IncomeHead {
-  id: string;
-  name: string;
-  description?: string;
-  isActive: boolean;
-  createdAt: string;
-}
+interface IncomeHead { id: string; name: string; description?: string; isActive: boolean; createdAt: string; }
+interface ExpenseHead { id: string; name: string; description?: string; isActive: boolean; createdAt: string; }
 
-interface ExpenseHead {
-  id: string;
-  name: string;
-  description?: string;
-  isActive: boolean;
-  createdAt: string;
-}
+const DEFAULT_INCOME: IncomeHead[] = [
+  { id: '1', name: 'OPD Consultation', description: 'Income from outpatient consultations', isActive: true, createdAt: new Date().toISOString() },
+  { id: '2', name: 'IPD Services', description: 'Income from inpatient services', isActive: true, createdAt: new Date().toISOString() },
+  { id: '3', name: 'Pharmacy Sales', description: 'Income from medicine sales', isActive: true, createdAt: new Date().toISOString() },
+  { id: '4', name: 'Laboratory Tests', description: 'Income from pathology and radiology tests', isActive: true, createdAt: new Date().toISOString() },
+  { id: '5', name: 'Operation Theatre', description: 'Income from surgical procedures', isActive: true, createdAt: new Date().toISOString() },
+];
+
+const DEFAULT_EXPENSE: ExpenseHead[] = [
+  { id: '1', name: 'Staff Salaries', description: 'Monthly salaries and wages', isActive: true, createdAt: new Date().toISOString() },
+  { id: '2', name: 'Medical Supplies', description: 'Purchase of medical equipment and supplies', isActive: true, createdAt: new Date().toISOString() },
+  { id: '3', name: 'Utilities', description: 'Electricity, water, gas, and other utilities', isActive: true, createdAt: new Date().toISOString() },
+  { id: '4', name: 'Maintenance', description: 'Equipment and facility maintenance costs', isActive: true, createdAt: new Date().toISOString() },
+  { id: '5', name: 'Administrative', description: 'Office supplies and administrative expenses', isActive: true, createdAt: new Date().toISOString() },
+];
 
 export default function FinanceSetup() {
   const [incomeHeads, setIncomeHeads] = useState<IncomeHead[]>([]);
   const [expenseHeads, setExpenseHeads] = useState<ExpenseHead[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('income');
-
-  // Dialog states
   const [isIncomeDialogOpen, setIsIncomeDialogOpen] = useState(false);
   const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
-
-  // Form states
   const [editingIncome, setEditingIncome] = useState<IncomeHead | null>(null);
   const [editingExpense, setEditingExpense] = useState<ExpenseHead | null>(null);
-
   const [incomeForm, setIncomeForm] = useState({ name: '', description: '' });
   const [expenseForm, setExpenseForm] = useState({ name: '', description: '' });
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
-      const savedIncome = localStorage.getItem('income_heads');
-      const savedExpense = localStorage.getItem('expense_heads');
-
-      if (savedIncome) {
-        setIncomeHeads(JSON.parse(savedIncome));
-      } else {
-        // Initialize with default income heads
-        const defaultIncomeHeads: IncomeHead[] = [
-          {
-            id: '1',
-            name: 'OPD Consultation',
-            description: 'Income from outpatient consultations',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '2',
-            name: 'IPD Services',
-            description: 'Income from inpatient services',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '3',
-            name: 'Pharmacy Sales',
-            description: 'Income from medicine sales',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '4',
-            name: 'Laboratory Tests',
-            description: 'Income from pathology and radiology tests',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '5',
-            name: 'Operation Theatre',
-            description: 'Income from surgical procedures',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          }
-        ];
-        setIncomeHeads(defaultIncomeHeads);
-        localStorage.setItem('income_heads', JSON.stringify(defaultIncomeHeads));
-      }
-
-      if (savedExpense) {
-        setExpenseHeads(JSON.parse(savedExpense));
-      } else {
-        // Initialize with default expense heads
-        const defaultExpenseHeads: ExpenseHead[] = [
-          {
-            id: '1',
-            name: 'Staff Salaries',
-            description: 'Monthly salaries and wages',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '2',
-            name: 'Medical Supplies',
-            description: 'Purchase of medical equipment and supplies',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '3',
-            name: 'Utilities',
-            description: 'Electricity, water, gas, and other utilities',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '4',
-            name: 'Maintenance',
-            description: 'Equipment and facility maintenance costs',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '5',
-            name: 'Administrative',
-            description: 'Office supplies and administrative expenses',
-            isActive: true,
-            createdAt: new Date().toISOString()
-          }
-        ];
-        setExpenseHeads(defaultExpenseHeads);
-        localStorage.setItem('expense_heads', JSON.stringify(defaultExpenseHeads));
-      }
-    } catch (error) {
-      console.error('Error loading data:', error);
+      const [incomeData, expenseData] = await Promise.allSettled([
+        financeApi.getIncomeHeads(),
+        financeApi.getExpenseHeads(),
+      ]);
+      setIncomeHeads(incomeData.status === 'fulfilled' && incomeData.value?.length ? incomeData.value : DEFAULT_INCOME);
+      setExpenseHeads(expenseData.status === 'fulfilled' && expenseData.value?.length ? expenseData.value : DEFAULT_EXPENSE);
+    } catch {
+      setIncomeHeads(DEFAULT_INCOME);
+      setExpenseHeads(DEFAULT_EXPENSE);
     }
   };
 
-  // Income Head functions
-  const handleIncomeSubmit = (e: React.FormEvent) => {
+  const handleIncomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!incomeForm.name.trim()) return;
-
-    const incomeData: IncomeHead = {
+    const data: IncomeHead = {
       id: editingIncome?.id || Date.now().toString(),
       name: incomeForm.name.trim(),
       description: incomeForm.description.trim(),
       isActive: true,
-      createdAt: editingIncome?.createdAt || new Date().toISOString()
+      createdAt: editingIncome?.createdAt || new Date().toISOString(),
     };
-
-    const newIncomeHeads = editingIncome
-      ? incomeHeads.map(i => i.id === editingIncome.id ? incomeData : i)
-      : [...incomeHeads, incomeData];
-
-    setIncomeHeads(newIncomeHeads);
-    localStorage.setItem('income_heads', JSON.stringify(newIncomeHeads));
-    resetIncomeForm();
+    if (editingIncome) {
+      await financeApi.updateIncome(editingIncome.id, data).catch(() => {});
+      setIncomeHeads(prev => prev.map(i => i.id === editingIncome.id ? data : i));
+    } else {
+      await financeApi.createIncome(data).catch(() => {});
+      setIncomeHeads(prev => [...prev, data]);
+    }
+    setIncomeForm({ name: '', description: '' });
+    setEditingIncome(null);
     setIsIncomeDialogOpen(false);
   };
 
-  const handleEditIncome = (income: IncomeHead) => {
-    setEditingIncome(income);
-    setIncomeForm({ name: income.name, description: income.description || '' });
-    setIsIncomeDialogOpen(true);
+  const handleDeleteIncome = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this income head?')) return;
+    await financeApi.deleteIncome(id).catch(() => {});
+    setIncomeHeads(prev => prev.filter(i => i.id !== id));
   };
 
-  const handleDeleteIncome = (id: string) => {
-    if (confirm('Are you sure you want to delete this income head?')) {
-      const newIncomeHeads = incomeHeads.filter(i => i.id !== id);
-      setIncomeHeads(newIncomeHeads);
-      localStorage.setItem('income_heads', JSON.stringify(newIncomeHeads));
-    }
+  const toggleIncomeStatus = async (id: string) => {
+    const item = incomeHeads.find(i => i.id === id);
+    if (!item) return;
+    await financeApi.updateIncome(id, { isActive: !item.isActive }).catch(() => {});
+    setIncomeHeads(prev => prev.map(i => i.id === id ? { ...i, isActive: !i.isActive } : i));
   };
 
-  const toggleIncomeStatus = (id: string) => {
-    const newIncomeHeads = incomeHeads.map(i =>
-      i.id === id ? { ...i, isActive: !i.isActive } : i
-    );
-    setIncomeHeads(newIncomeHeads);
-    localStorage.setItem('income_heads', JSON.stringify(newIncomeHeads));
-  };
-
-  const resetIncomeForm = () => {
-    setIncomeForm({ name: '', description: '' });
-    setEditingIncome(null);
-  };
-
-  // Expense Head functions
-  const handleExpenseSubmit = (e: React.FormEvent) => {
+  const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!expenseForm.name.trim()) return;
-
-    const expenseData: ExpenseHead = {
+    const data: ExpenseHead = {
       id: editingExpense?.id || Date.now().toString(),
       name: expenseForm.name.trim(),
       description: expenseForm.description.trim(),
       isActive: true,
-      createdAt: editingExpense?.createdAt || new Date().toISOString()
+      createdAt: editingExpense?.createdAt || new Date().toISOString(),
     };
-
-    const newExpenseHeads = editingExpense
-      ? expenseHeads.map(e => e.id === editingExpense.id ? expenseData : e)
-      : [...expenseHeads, expenseData];
-
-    setExpenseHeads(newExpenseHeads);
-    localStorage.setItem('expense_heads', JSON.stringify(newExpenseHeads));
-    resetExpenseForm();
+    if (editingExpense) {
+      await financeApi.updateExpense(editingExpense.id, data).catch(() => {});
+      setExpenseHeads(prev => prev.map(e => e.id === editingExpense.id ? data : e));
+    } else {
+      await financeApi.createExpense(data).catch(() => {});
+      setExpenseHeads(prev => [...prev, data]);
+    }
+    setExpenseForm({ name: '', description: '' });
+    setEditingExpense(null);
     setIsExpenseDialogOpen(false);
   };
 
-  const handleEditExpense = (expense: ExpenseHead) => {
-    setEditingExpense(expense);
-    setExpenseForm({ name: expense.name, description: expense.description || '' });
-    setIsExpenseDialogOpen(true);
+  const handleDeleteExpense = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this expense head?')) return;
+    await financeApi.deleteExpense(id).catch(() => {});
+    setExpenseHeads(prev => prev.filter(e => e.id !== id));
   };
 
-  const handleDeleteExpense = (id: string) => {
-    if (confirm('Are you sure you want to delete this expense head?')) {
-      const newExpenseHeads = expenseHeads.filter(e => e.id !== id);
-      setExpenseHeads(newExpenseHeads);
-      localStorage.setItem('expense_heads', JSON.stringify(newExpenseHeads));
-    }
+  const toggleExpenseStatus = async (id: string) => {
+    const item = expenseHeads.find(e => e.id === id);
+    if (!item) return;
+    await financeApi.updateExpense(id, { isActive: !item.isActive }).catch(() => {});
+    setExpenseHeads(prev => prev.map(e => e.id === id ? { ...e, isActive: !e.isActive } : e));
   };
 
-  const toggleExpenseStatus = (id: string) => {
-    const newExpenseHeads = expenseHeads.map(e =>
-      e.id === id ? { ...e, isActive: !e.isActive } : e
-    );
-    setExpenseHeads(newExpenseHeads);
-    localStorage.setItem('expense_heads', JSON.stringify(newExpenseHeads));
-  };
-
-  const resetExpenseForm = () => {
-    setExpenseForm({ name: '', description: '' });
-    setEditingExpense(null);
-  };
-
-  const filteredIncomeHeads = incomeHeads.filter(income =>
-    income.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (income.description && income.description.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const filteredExpenseHeads = expenseHeads.filter(expense =>
-    expense.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (expense.description && expense.description.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const activeIncomeHeads = filteredIncomeHeads.filter(i => i.isActive);
-  const activeExpenseHeads = filteredExpenseHeads.filter(e => e.isActive);
+  const filteredIncome = incomeHeads.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredExpense = expenseHeads.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <div className="space-y-6">
@@ -264,59 +136,17 @@ export default function FinanceSetup() {
           <h2 className="text-2xl font-bold">Finance Setup</h2>
           <p className="text-gray-600">Manage income and expense categories</p>
         </div>
-        <div className="flex items-center space-x-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 w-64"
-            />
-          </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 w-64" />
         </div>
       </div>
 
-      {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="flex items-center p-6">
-            <DollarSign className="h-8 w-8 text-blue-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Categories</p>
-              <p className="text-2xl font-bold">{incomeHeads.length + expenseHeads.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center p-6">
-            <TrendingUp className="h-8 w-8 text-green-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Income Heads</p>
-              <p className="text-2xl font-bold text-green-600">{incomeHeads.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center p-6">
-            <TrendingDown className="h-8 w-8 text-red-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Expense Heads</p>
-              <p className="text-2xl font-bold text-red-600">{expenseHeads.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="flex items-center p-6">
-            <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
-              <div className="h-4 w-4 bg-blue-600 rounded-full"></div>
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Active Categories</p>
-              <p className="text-2xl font-bold text-blue-600">{activeIncomeHeads.length + activeExpenseHeads.length}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="flex items-center p-6"><DollarSign className="h-8 w-8 text-blue-600" /><div className="ml-4"><p className="text-sm font-medium text-gray-600">Total Categories</p><p className="text-2xl font-bold">{incomeHeads.length + expenseHeads.length}</p></div></CardContent></Card>
+        <Card><CardContent className="flex items-center p-6"><TrendingUp className="h-8 w-8 text-green-600" /><div className="ml-4"><p className="text-sm font-medium text-gray-600">Income Heads</p><p className="text-2xl font-bold text-green-600">{incomeHeads.length}</p></div></CardContent></Card>
+        <Card><CardContent className="flex items-center p-6"><TrendingDown className="h-8 w-8 text-red-600" /><div className="ml-4"><p className="text-sm font-medium text-gray-600">Expense Heads</p><p className="text-2xl font-bold text-red-600">{expenseHeads.length}</p></div></CardContent></Card>
+        <Card><CardContent className="flex items-center p-6"><div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center"><div className="h-4 w-4 bg-blue-600 rounded-full"></div></div><div className="ml-4"><p className="text-sm font-medium text-gray-600">Active</p><p className="text-2xl font-bold text-blue-600">{incomeHeads.filter(i=>i.isActive).length + expenseHeads.filter(e=>e.isActive).length}</p></div></CardContent></Card>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -327,107 +157,44 @@ export default function FinanceSetup() {
 
         <TabsContent value="income" className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">Income Heads ({filteredIncomeHeads.length})</h3>
+            <h3 className="text-lg font-semibold">Income Heads ({filteredIncome.length})</h3>
             <Dialog open={isIncomeDialogOpen} onOpenChange={setIsIncomeDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={resetIncomeForm}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Income Head
+                <Button onClick={() => { setEditingIncome(null); setIncomeForm({ name: '', description: '' }); }}>
+                  <Plus className="w-4 h-4 mr-2" />Add Income Head
                 </Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingIncome ? 'Edit Income Head' : 'Add Income Head'}
-                  </DialogTitle>
-                </DialogHeader>
+                <DialogHeader><DialogTitle>{editingIncome ? 'Edit Income Head' : 'Add Income Head'}</DialogTitle></DialogHeader>
                 <form onSubmit={handleIncomeSubmit} className="space-y-4">
-                  <div>
-                    <Label htmlFor="incomeName">Income Head Name *</Label>
-                    <Input
-                      id="incomeName"
-                      value={incomeForm.name}
-                      onChange={(e) => setIncomeForm(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="Enter income head name"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="incomeDescription">Description</Label>
-                    <Textarea
-                      id="incomeDescription"
-                      value={incomeForm.description}
-                      onChange={(e) => setIncomeForm(prev => ({ ...prev, description: e.target.value }))}
-                      placeholder="Enter description"
-                      rows={3}
-                    />
-                  </div>
+                  <div><Label>Income Head Name *</Label><Input value={incomeForm.name} onChange={(e) => setIncomeForm(p => ({ ...p, name: e.target.value }))} placeholder="Enter income head name" required /></div>
+                  <div><Label>Description</Label><Textarea value={incomeForm.description} onChange={(e) => setIncomeForm(p => ({ ...p, description: e.target.value }))} placeholder="Enter description" rows={3} /></div>
                   <div className="flex justify-end space-x-2">
-                    <Button type="button" variant="outline" onClick={() => setIsIncomeDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit">
-                      {editingIncome ? 'Update' : 'Save'}
-                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setIsIncomeDialogOpen(false)}>Cancel</Button>
+                    <Button type="submit">{editingIncome ? 'Update' : 'Save'}</Button>
                   </div>
                 </form>
               </DialogContent>
             </Dialog>
           </div>
-
           <div className="grid gap-4">
-            {filteredIncomeHeads.map(income => (
+            {filteredIncome.map(income => (
               <Card key={income.id} className={`border-l-4 ${income.isActive ? 'border-l-green-500' : 'border-l-gray-400'}`}>
                 <CardHeader>
                   <CardTitle className="flex justify-between items-center">
                     <div className="flex items-center space-x-2">
                       <TrendingUp className={`w-5 h-5 ${income.isActive ? 'text-green-600' : 'text-gray-400'}`} />
                       <span className={income.isActive ? '' : 'text-gray-600'}>{income.name}</span>
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        income.isActive 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {income.isActive ? 'Active' : 'Inactive'}
-                      </span>
+                      <span className={`px-2 py-1 text-xs rounded-full ${income.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{income.isActive ? 'Active' : 'Inactive'}</span>
                     </div>
                     <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => toggleIncomeStatus(income.id)}
-                        className={income.isActive ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'}
-                      >
-                        {income.isActive ? 'Disable' : 'Enable'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditIncome(income)}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeleteIncome(income.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => toggleIncomeStatus(income.id)} className={income.isActive ? 'text-orange-600' : 'text-green-600'}>{income.isActive ? 'Disable' : 'Enable'}</Button>
+                      <Button variant="outline" size="sm" onClick={() => { setEditingIncome(income); setIncomeForm({ name: income.name, description: income.description || '' }); setIsIncomeDialogOpen(true); }}><Edit className="w-4 h-4" /></Button>
+                      <Button variant="outline" size="sm" onClick={() => handleDeleteIncome(income.id)} className="text-red-600"><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </CardTitle>
                 </CardHeader>
-                {income.description && (
-                  <CardContent>
-                    <p className={`text-sm ${income.isActive ? 'text-gray-600' : 'text-gray-500'}`}>
-                      {income.description}
-                    </p>
-                    <div className={`mt-2 text-xs ${income.isActive ? 'text-gray-500' : 'text-gray-400'}`}>
-                      Created: {new Date(income.createdAt).toLocaleDateString()}
-                    </div>
-                  </CardContent>
-                )}
+                {income.description && <CardContent><p className="text-sm text-gray-600">{income.description}</p></CardContent>}
               </Card>
             ))}
           </div>
@@ -435,107 +202,44 @@ export default function FinanceSetup() {
 
         <TabsContent value="expense" className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold">Expense Heads ({filteredExpenseHeads.length})</h3>
+            <h3 className="text-lg font-semibold">Expense Heads ({filteredExpense.length})</h3>
             <Dialog open={isExpenseDialogOpen} onOpenChange={setIsExpenseDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={resetExpenseForm}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Expense Head
+                <Button onClick={() => { setEditingExpense(null); setExpenseForm({ name: '', description: '' }); }}>
+                  <Plus className="w-4 h-4 mr-2" />Add Expense Head
                 </Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingExpense ? 'Edit Expense Head' : 'Add Expense Head'}
-                  </DialogTitle>
-                </DialogHeader>
+                <DialogHeader><DialogTitle>{editingExpense ? 'Edit Expense Head' : 'Add Expense Head'}</DialogTitle></DialogHeader>
                 <form onSubmit={handleExpenseSubmit} className="space-y-4">
-                  <div>
-                    <Label htmlFor="expenseName">Expense Head Name *</Label>
-                    <Input
-                      id="expenseName"
-                      value={expenseForm.name}
-                      onChange={(e) => setExpenseForm(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="Enter expense head name"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="expenseDescription">Description</Label>
-                    <Textarea
-                      id="expenseDescription"
-                      value={expenseForm.description}
-                      onChange={(e) => setExpenseForm(prev => ({ ...prev, description: e.target.value }))}
-                      placeholder="Enter description"
-                      rows={3}
-                    />
-                  </div>
+                  <div><Label>Expense Head Name *</Label><Input value={expenseForm.name} onChange={(e) => setExpenseForm(p => ({ ...p, name: e.target.value }))} placeholder="Enter expense head name" required /></div>
+                  <div><Label>Description</Label><Textarea value={expenseForm.description} onChange={(e) => setExpenseForm(p => ({ ...p, description: e.target.value }))} placeholder="Enter description" rows={3} /></div>
                   <div className="flex justify-end space-x-2">
-                    <Button type="button" variant="outline" onClick={() => setIsExpenseDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit">
-                      {editingExpense ? 'Update' : 'Save'}
-                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setIsExpenseDialogOpen(false)}>Cancel</Button>
+                    <Button type="submit">{editingExpense ? 'Update' : 'Save'}</Button>
                   </div>
                 </form>
               </DialogContent>
             </Dialog>
           </div>
-
           <div className="grid gap-4">
-            {filteredExpenseHeads.map(expense => (
+            {filteredExpense.map(expense => (
               <Card key={expense.id} className={`border-l-4 ${expense.isActive ? 'border-l-red-500' : 'border-l-gray-400'}`}>
                 <CardHeader>
                   <CardTitle className="flex justify-between items-center">
                     <div className="flex items-center space-x-2">
                       <TrendingDown className={`w-5 h-5 ${expense.isActive ? 'text-red-600' : 'text-gray-400'}`} />
                       <span className={expense.isActive ? '' : 'text-gray-600'}>{expense.name}</span>
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        expense.isActive 
-                          ? 'bg-red-100 text-red-800' 
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {expense.isActive ? 'Active' : 'Inactive'}
-                      </span>
+                      <span className={`px-2 py-1 text-xs rounded-full ${expense.isActive ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>{expense.isActive ? 'Active' : 'Inactive'}</span>
                     </div>
                     <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => toggleExpenseStatus(expense.id)}
-                        className={expense.isActive ? 'text-orange-600 hover:text-orange-700' : 'text-green-600 hover:text-green-700'}
-                      >
-                        {expense.isActive ? 'Disable' : 'Enable'}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditExpense(expense)}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeleteExpense(expense.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => toggleExpenseStatus(expense.id)} className={expense.isActive ? 'text-orange-600' : 'text-green-600'}>{expense.isActive ? 'Disable' : 'Enable'}</Button>
+                      <Button variant="outline" size="sm" onClick={() => { setEditingExpense(expense); setExpenseForm({ name: expense.name, description: expense.description || '' }); setIsExpenseDialogOpen(true); }}><Edit className="w-4 h-4" /></Button>
+                      <Button variant="outline" size="sm" onClick={() => handleDeleteExpense(expense.id)} className="text-red-600"><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </CardTitle>
                 </CardHeader>
-                {expense.description && (
-                  <CardContent>
-                    <p className={`text-sm ${expense.isActive ? 'text-gray-600' : 'text-gray-500'}`}>
-                      {expense.description}
-                    </p>
-                    <div className={`mt-2 text-xs ${expense.isActive ? 'text-gray-500' : 'text-gray-400'}`}>
-                      Created: {new Date(expense.createdAt).toLocaleDateString()}
-                    </div>
-                  </CardContent>
-                )}
+                {expense.description && <CardContent><p className="text-sm text-gray-600">{expense.description}</p></CardContent>}
               </Card>
             ))}
           </div>

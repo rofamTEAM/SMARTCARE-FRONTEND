@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '../ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Trash2, Edit, Plus, Search, Users, MessageSquare, Building } from 'lucide-react';
+import { visitorsApi, complaintsApi } from '../../utils/api';
 
 interface VisitorPurpose {
   id: string;
@@ -55,47 +56,28 @@ export default function FrontOfficeSetup() {
     loadData();
   }, []);
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
-      const savedPurposes = localStorage.getItem('visitor_purposes');
-      const savedTypes = localStorage.getItem('complaint_types');
-      const savedSources = localStorage.getItem('complaint_sources');
-
-      if (savedPurposes) {
-        setVisitorPurposes(JSON.parse(savedPurposes));
-      } else {
-        const defaultPurposes: VisitorPurpose[] = [
-          { id: '1', purpose: 'Patient Visit', description: 'Visiting patients', isActive: true, createdAt: new Date().toISOString() },
-          { id: '2', purpose: 'Business Meeting', description: 'Official business meetings', isActive: true, createdAt: new Date().toISOString() },
-          { id: '3', purpose: 'Medical Consultation', description: 'Consulting with doctors', isActive: true, createdAt: new Date().toISOString() }
-        ];
-        setVisitorPurposes(defaultPurposes);
-        localStorage.setItem('visitor_purposes', JSON.stringify(defaultPurposes));
-      }
-
-      if (savedTypes) {
-        setComplaintTypes(JSON.parse(savedTypes));
-      } else {
-        const defaultTypes: ComplaintType[] = [
-          { id: '1', complaintType: 'Service Quality', description: 'Issues with service quality', isActive: true, createdAt: new Date().toISOString() },
-          { id: '2', complaintType: 'Staff Behavior', description: 'Staff behavior related complaints', isActive: true, createdAt: new Date().toISOString() },
-          { id: '3', complaintType: 'Facility Issues', description: 'Hospital facility related issues', isActive: true, createdAt: new Date().toISOString() }
-        ];
-        setComplaintTypes(defaultTypes);
-        localStorage.setItem('complaint_types', JSON.stringify(defaultTypes));
-      }
-
-      if (savedSources) {
-        setComplaintSources(JSON.parse(savedSources));
-      } else {
-        const defaultSources: ComplaintSource[] = [
-          { id: '1', source: 'Phone Call', description: 'Complaints received via phone', isActive: true, createdAt: new Date().toISOString() },
-          { id: '2', source: 'Email', description: 'Complaints received via email', isActive: true, createdAt: new Date().toISOString() },
-          { id: '3', source: 'In Person', description: 'Direct complaints at reception', isActive: true, createdAt: new Date().toISOString() }
-        ];
-        setComplaintSources(defaultSources);
-        localStorage.setItem('complaint_sources', JSON.stringify(defaultSources));
-      }
+      const [purposesData, typesData] = await Promise.allSettled([
+        visitorsApi.getAll(),
+        complaintsApi.getAll(),
+      ]);
+      if (purposesData.status === 'fulfilled' && purposesData.value?.length) setVisitorPurposes(purposesData.value);
+      else setVisitorPurposes([
+        { id: '1', purpose: 'Patient Visit', description: 'Visiting patients', isActive: true, createdAt: new Date().toISOString() },
+        { id: '2', purpose: 'Business Meeting', description: 'Official business meetings', isActive: true, createdAt: new Date().toISOString() },
+        { id: '3', purpose: 'Medical Consultation', description: 'Consulting with doctors', isActive: true, createdAt: new Date().toISOString() },
+      ]);
+      setComplaintTypes([
+        { id: '1', complaintType: 'Service Quality', description: 'Issues with service quality', isActive: true, createdAt: new Date().toISOString() },
+        { id: '2', complaintType: 'Staff Behavior', description: 'Staff behavior related complaints', isActive: true, createdAt: new Date().toISOString() },
+        { id: '3', complaintType: 'Facility Issues', description: 'Hospital facility related issues', isActive: true, createdAt: new Date().toISOString() },
+      ]);
+      setComplaintSources([
+        { id: '1', source: 'Phone Call', description: 'Complaints received via phone', isActive: true, createdAt: new Date().toISOString() },
+        { id: '2', source: 'Email', description: 'Complaints received via email', isActive: true, createdAt: new Date().toISOString() },
+        { id: '3', source: 'In Person', description: 'Direct complaints at reception', isActive: true, createdAt: new Date().toISOString() },
+      ]);
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -116,9 +98,9 @@ export default function FrontOfficeSetup() {
     const newPurposes = editingPurpose
       ? visitorPurposes.map(p => p.id === editingPurpose.id ? purposeData : p)
       : [...visitorPurposes, purposeData];
-
     setVisitorPurposes(newPurposes);
-    localStorage.setItem('visitor_purposes', JSON.stringify(newPurposes));
+    if (editingPurpose) { visitorsApi.update(editingPurpose.id, purposeData).catch(() => {}); }
+    else { visitorsApi.create(purposeData).catch(() => {}); }
     resetPurposeForm();
     setIsPurposeDialogOpen(false);
   };
@@ -138,9 +120,9 @@ export default function FrontOfficeSetup() {
     const newTypes = editingType
       ? complaintTypes.map(t => t.id === editingType.id ? typeData : t)
       : [...complaintTypes, typeData];
-
     setComplaintTypes(newTypes);
-    localStorage.setItem('complaint_types', JSON.stringify(newTypes));
+    if (editingType) { complaintsApi.update(editingType.id, typeData).catch(() => {}); }
+    else { complaintsApi.create(typeData).catch(() => {}); }
     resetTypeForm();
     setIsTypeDialogOpen(false);
   };
@@ -160,9 +142,7 @@ export default function FrontOfficeSetup() {
     const newSources = editingSource
       ? complaintSources.map(s => s.id === editingSource.id ? sourceData : s)
       : [...complaintSources, sourceData];
-
     setComplaintSources(newSources);
-    localStorage.setItem('complaint_sources', JSON.stringify(newSources));
     resetSourceForm();
     setIsSourceDialogOpen(false);
   };
@@ -320,9 +300,8 @@ export default function FrontOfficeSetup() {
                         size="sm"
                         onClick={() => {
                           if (confirm('Are you sure?')) {
-                            const newPurposes = visitorPurposes.filter(p => p.id !== purpose.id);
-                            setVisitorPurposes(newPurposes);
-                            localStorage.setItem('visitor_purposes', JSON.stringify(newPurposes));
+                            visitorsApi.delete(purpose.id).catch(() => {});
+                            setVisitorPurposes(prev => prev.filter(p => p.id !== purpose.id));
                           }
                         }}
                         className="text-red-600 hover:text-red-700"
@@ -413,9 +392,8 @@ export default function FrontOfficeSetup() {
                         size="sm"
                         onClick={() => {
                           if (confirm('Are you sure?')) {
-                            const newTypes = complaintTypes.filter(t => t.id !== type.id);
-                            setComplaintTypes(newTypes);
-                            localStorage.setItem('complaint_types', JSON.stringify(newTypes));
+                            complaintsApi.delete(type.id).catch(() => {});
+                            setComplaintTypes(prev => prev.filter(t => t.id !== type.id));
                           }
                         }}
                         className="text-red-600 hover:text-red-700"
@@ -506,9 +484,7 @@ export default function FrontOfficeSetup() {
                         size="sm"
                         onClick={() => {
                           if (confirm('Are you sure?')) {
-                            const newSources = complaintSources.filter(s => s.id !== source.id);
-                            setComplaintSources(newSources);
-                            localStorage.setItem('complaint_sources', JSON.stringify(newSources));
+                            setComplaintSources(prev => prev.filter(s => s.id !== source.id));
                           }
                         }}
                         className="text-red-600 hover:text-red-700"

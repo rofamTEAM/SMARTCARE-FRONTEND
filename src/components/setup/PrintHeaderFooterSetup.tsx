@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Trash2, Edit, Plus } from 'lucide-react';
+import { settingsApi } from '../../utils/api';
 
 interface PrintTemplate {
   id: string;
@@ -40,24 +41,16 @@ export default function PrintHeaderFooterSetup() {
     loadTemplates();
   }, []);
 
-  const loadTemplates = () => {
+  const loadTemplates = async () => {
     try {
-      const saved = localStorage.getItem('print_templates');
-      if (saved) {
-        setTemplates(JSON.parse(saved));
-      }
-    } catch (error) {
-      console.error('Error loading templates:', error);
-    }
+      const data = await settingsApi.get();
+      if (data?.printTemplates?.length) setTemplates(data.printTemplates);
+    } catch {}
   };
 
-  const saveTemplates = (newTemplates: PrintTemplate[]) => {
-    try {
-      localStorage.setItem('print_templates', JSON.stringify(newTemplates));
-      setTemplates(newTemplates);
-    } catch (error) {
-      console.error('Error saving templates:', error);
-    }
+  const saveTemplates = async (newTemplates: PrintTemplate[]) => {
+    setTemplates(newTemplates);
+    await settingsApi.update({ printTemplates: newTemplates }).catch(() => {});
   };
 
   const handleSubmit = (e: React.FormEvent) => {

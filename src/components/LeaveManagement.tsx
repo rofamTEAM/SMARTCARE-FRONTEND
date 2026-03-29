@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-
-interface LeaveRequest {
+import { staffApi } from '../utils/api';
+import { staffApi } from '../utils/api';
   id: string;
   staffId: string;
   staffName: string;
@@ -45,14 +45,17 @@ export function LeaveManagement({ session }: { session: any }) {
     fetchData();
   }, []);
 
-  const fetchData = () => {
-    const localRequests = localStorage.getItem('hospital_leave_requests');
-    const localBalances = localStorage.getItem('hospital_leave_balances');
-    const localStaff = localStorage.getItem('hospital_staff');
-
-    if (localRequests) setLeaveRequests(JSON.parse(localRequests));
-    if (localBalances) setLeaveBalances(JSON.parse(localBalances));
-    if (localStaff) setStaff(JSON.parse(localStaff));
+  const fetchData = async () => {
+    try {
+      const [requests, staffData] = await Promise.allSettled([
+        staffApi.getAll('type=leave_requests'),
+        staffApi.getAll(),
+      ]);
+      if (requests.status === 'fulfilled') setLeaveRequests(requests.value || []);
+      if (staffData.status === 'fulfilled') setStaff(staffData.value || []);
+    } catch (error) {
+      setLeaveRequests([]); setStaff([]);
+    }
   };
 
   const handleAddRequest = () => {
@@ -81,7 +84,7 @@ export function LeaveManagement({ session }: { session: any }) {
 
     const updatedRequests = [...leaveRequests, newRequest];
     setLeaveRequests(updatedRequests);
-    localStorage.setItem('hospital_leave_requests', JSON.stringify(updatedRequests));
+    await staffApi.create({ ...newRequest, type: 'leave_request' }).catch(() => {});
     
     setFormData({});
     setIsAddModalOpen(false);
@@ -89,19 +92,13 @@ export function LeaveManagement({ session }: { session: any }) {
   };
 
   const handleApproval = (id: string, status: 'Approved' | 'Rejected') => {
-    const updatedRequests = leaveRequests.map(request => 
-      request.id === id 
-        ? { 
-            ...request, 
-            status, 
-            approvedBy: session?.user?.user_metadata?.name || 'Admin',
-            approvedDate: new Date().toISOString().split('T')[0]
-          }
+    const updatedRequests = leaveRequests.map(request =>
+      request.id === id
+        ? { ...request, status, approvedBy: session?.user?.user_metadata?.name || 'Admin', approvedDate: new Date().toISOString().split('T')[0] }
         : request
     );
-    
     setLeaveRequests(updatedRequests);
-    localStorage.setItem('hospital_leave_requests', JSON.stringify(updatedRequests));
+    await staffApi.update(id, { status, type: 'leave_request' }).catch(() => {});
     
     if (status === 'Approved') {
       updateLeaveBalance(id);
@@ -131,7 +128,7 @@ export function LeaveManagement({ session }: { session: any }) {
     });
 
     setLeaveBalances(updatedBalances);
-    localStorage.setItem('hospital_leave_balances', JSON.stringify(updatedBalances));
+    await staffApi.update(request.staffId, { leaveBalance: updatedBalances, type: 'leave_balance' }).catch(() => {});
   };
 
   const filteredRequests = leaveRequests.filter(request =>

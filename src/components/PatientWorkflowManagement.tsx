@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { patientService, Patient } from '../utils/supabase/client';
+import { patientsApi } from '../utils/api';
 import { toast } from 'sonner';
 
 interface PatientWorkflowProps {
@@ -48,14 +49,9 @@ export function PatientWorkflowManagement({ session }: PatientWorkflowProps) {
       // Try to get patients from database first
       let data = [];
       try {
-        data = await patientService.getAll();
+        data = await patientsApi.getAll();
       } catch (dbError) {
-        console.warn('Database unavailable, using localStorage:', dbError);
-        // Fallback to localStorage
-        const localPatients = localStorage.getItem('hospital_patients');
-        if (localPatients) {
-          data = JSON.parse(localPatients);
-        }
+        data = [];
       }
       
       // Add workflow stages to patients

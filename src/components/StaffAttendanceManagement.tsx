@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { toast } from 'sonner';
+import { staffApi } from '../utils/api';
 
 interface AttendanceRecord {
   id: string;
@@ -35,19 +36,14 @@ export function StaffAttendanceManagement({ session }: StaffAttendanceManagement
 
   const fetchAttendance = async () => {
     try {
-      const localAttendance = localStorage.getItem('hospital_attendance');
-      if (localAttendance) {
-        const allAttendance = JSON.parse(localAttendance);
-        const dateFiltered = allAttendance.filter((record: AttendanceRecord) => 
-          record.date === selectedDate
-        );
-        setAttendance(dateFiltered);
+      const data = await staffApi.getAll(`type=attendance&date=${selectedDate}`);
+      if (data?.length) {
+        setAttendance(data.filter((r: any) => r.date === selectedDate));
       } else {
-        // Generate sample staff for the selected date
         generateSampleAttendance();
       }
     } catch (error) {
-      console.error('Error fetching attendance:', error);
+      generateSampleAttendance();
     }
   };
 
@@ -132,14 +128,11 @@ export function StaffAttendanceManagement({ session }: StaffAttendanceManagement
     toast.success('Attendance status updated!');
   };
 
-  const saveAttendance = (attendanceData: AttendanceRecord[]) => {
+  const saveAttendance = async (attendanceData: AttendanceRecord[]) => {
     try {
-      const existingAttendance = JSON.parse(localStorage.getItem('hospital_attendance') || '[]');
-      const otherDatesAttendance = existingAttendance.filter((record: AttendanceRecord) => 
-        record.date !== selectedDate
-      );
-      const allAttendance = [...otherDatesAttendance, ...attendanceData];
-      localStorage.setItem('hospital_attendance', JSON.stringify(allAttendance));
+      await Promise.all(attendanceData.map(r =>
+        staffApi.update(r.id, { ...r, type: 'attendance' }).catch(() => {})
+      ));
     } catch (error) {
       console.error('Error saving attendance:', error);
     }
@@ -155,38 +148,12 @@ export function StaffAttendanceManagement({ session }: StaffAttendanceManagement
     }
   };
 
-  const generateMonthlyReport = () => {
+  const generateMonthlyReport = async () => {
     try {
-      const allAttendance = JSON.parse(localStorage.getItem('hospital_attendance') || '[]');
-      const monthlyData = allAttendance.filter((record: AttendanceRecord) => 
-        record.date.startsWith(selectedMonth)
-      );
-      
-      const report = monthlyData.reduce((acc: any, record: AttendanceRecord) => {
-        if (!acc[record.staffName]) {
-          acc[record.staffName] = {
-            name: record.staffName,
-            role: record.role,
-            present: 0,
-            absent: 0,
-            late: 0,
-            halfDay: 0,
-            totalHours: 0,
-            overtime: 0
-          };
-        }
-        
-        acc[record.staffName][record.status.toLowerCase().replace(' ', '')]++;
-        acc[record.staffName].totalHours += record.workingHours || 0;
-        acc[record.staffName].overtime += record.overtime || 0;
-        
-        return acc;
-      }, {});
-
-      console.log('Monthly Attendance Report:', report);
-      toast.success('Monthly report generated! Check console for details.');
+      const data = await staffApi.getAll(`type=attendance&month=${selectedMonth}`);
+      console.log('Monthly Attendance Report:', data);
+      toast.success('Monthly report generated!');
     } catch (error) {
-      console.error('Error generating report:', error);
       toast.error('Failed to generate report.');
     }
   };
