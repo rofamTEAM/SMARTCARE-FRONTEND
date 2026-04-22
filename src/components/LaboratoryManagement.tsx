@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   FlaskConical,
@@ -28,6 +28,7 @@ import { Progress } from './ui/progress';
 import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { AIInsightPanel } from './AIInsightPanel';
+import { VoiceAgent } from './VoiceAgent';
 
 interface LabTest {
   id: string;
@@ -47,21 +48,66 @@ interface Equipment {
 }
 
 export function LaboratoryManagement() {
-  const [tests] = useState<LabTest[]>([
-    { id: '1', patientName: 'John Smith', testType: 'CBC', priority: 'stat', status: 'pending', orderedDate: '2024-12-08', category: 'Hematology' },
-    { id: '2', patientName: 'Emily Davis', testType: 'Lipid Panel', priority: 'routine', status: 'in-progress', orderedDate: '2024-12-08', category: 'Chemistry' },
-    { id: '3', patientName: 'Michael Brown', testType: 'Cardiac Enzymes', priority: 'urgent', status: 'pending', orderedDate: '2024-12-08', category: 'Chemistry' },
-    { id: '4', patientName: 'Sarah Wilson', testType: 'Blood Culture', priority: 'routine', status: 'completed', orderedDate: '2024-12-07', category: 'Microbiology' },
-  ]);
-
-  const [equipment] = useState<Equipment[]>([
-    { id: '1', name: 'Hematology Analyzer', status: 'online', lastMaintenance: '2024-12-01' },
-    { id: '2', name: 'Chemistry Analyzer', status: 'online', lastMaintenance: '2024-11-28' },
-    { id: '3', name: 'Microscope #1', status: 'maintenance', lastMaintenance: '2024-12-07' },
-    { id: '4', name: 'PCR Machine', status: 'online', lastMaintenance: '2024-11-25' },
-  ]);
-
+  const [tests, setTests] = useState<LabTest[]>([]);
+  const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [resultForm, setResultForm] = useState({ testId: '', result: '', criticalFlag: false });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchLabData();
+  }, []);
+
+  const fetchLabData = async () => {
+    try {
+      setLoading(true);
+      const { apiClient } = await import('../services/apiClient');
+      
+      // Fetch pathology/lab tests from backend
+      const data = await apiClient.get('/pathology');
+      
+      const formattedTests: LabTest[] = (data || []).map((test: any) => ({
+        id: test.id,
+        patientName: test.patientName || 'Unknown',
+        testType: test.testName || 'Lab Test',
+        priority: test.priority || 'routine',
+        status: test.status || 'pending',
+        orderedDate: test.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0],
+        category: test.category || 'General'
+      }));
+
+      setTests(formattedTests.length > 0 ? formattedTests : [
+        { id: '1', patientName: 'John Smith', testType: 'CBC', priority: 'stat', status: 'pending', orderedDate: '2024-12-08', category: 'Hematology' },
+        { id: '2', patientName: 'Emily Davis', testType: 'Lipid Panel', priority: 'routine', status: 'in-progress', orderedDate: '2024-12-08', category: 'Chemistry' },
+      ]);
+
+      // Fetch equipment status
+      const equipData = await apiClient.get('/equipment');
+      
+      const formattedEquip: Equipment[] = (equipData || []).map((eq: any) => ({
+        id: eq.id,
+        name: eq.name,
+        status: eq.status || 'online',
+        lastMaintenance: eq.lastMaintenance?.split('T')[0] || new Date().toISOString().split('T')[0]
+      }));
+
+      setEquipment(formattedEquip.length > 0 ? formattedEquip : [
+        { id: '1', name: 'Hematology Analyzer', status: 'online', lastMaintenance: '2024-12-01' },
+        { id: '2', name: 'Chemistry Analyzer', status: 'online', lastMaintenance: '2024-11-28' },
+      ]);
+    } catch (error) {
+      console.error('Error fetching lab data:', error);
+      // Use fallback data
+      setTests([
+        { id: '1', patientName: 'John Smith', testType: 'CBC', priority: 'stat', status: 'pending', orderedDate: '2024-12-08', category: 'Hematology' },
+        { id: '2', patientName: 'Emily Davis', testType: 'Lipid Panel', priority: 'routine', status: 'in-progress', orderedDate: '2024-12-08', category: 'Chemistry' },
+      ]);
+      setEquipment([
+        { id: '1', name: 'Hematology Analyzer', status: 'online', lastMaintenance: '2024-12-01' },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const todayStats = {
     pending: tests.filter(t => t.status === 'pending').length,
@@ -112,6 +158,9 @@ export function LaboratoryManagement() {
           Laboratory Management
         </h1>
         <p className="text-sm text-muted-foreground mt-1">Lab operations and test management</p>
+        <div className="mt-2">
+          <VoiceAgent department="laboratory" userRole="lab_technician" />
+        </div>
       </motion.div>
 
       {/* Stats Cards */}

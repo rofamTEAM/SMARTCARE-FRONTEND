@@ -22,7 +22,8 @@ import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { DatabaseService } from '../utils/supabase/database';
+import { opdApi } from '../utils/api';
+import { VoiceAgent } from './VoiceAgent';
 
 interface OutpatientAppointment {
   id: string;
@@ -76,8 +77,8 @@ export function OutpatientManagement({ session }: OutpatientManagementProps) {
 
   const fetchData = async () => {
     try {
-      const { data } = await DatabaseService.getOutpatientAppointments();
-      setAppointments(data);
+      const data = await opdApi.getAll();
+      setAppointments(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching appointments:', error);
       toast.error('Failed to load appointments');
@@ -128,26 +129,24 @@ export function OutpatientManagement({ session }: OutpatientManagementProps) {
     }
   };
 
-  const handleCompleteConsultation = () => {
-    if (selectedAppointment) {
-      try {
-        const newConsultation: OutpatientConsultation = {
-          id: Date.now().toString(),
-          ...consultationForm as OutpatientConsultation
-        };
-        
-        setConsultations([...consultations, newConsultation]);
-        setAppointments(appointments.map(apt =>
-          apt.id === selectedAppointment.id ? { ...apt, status: 'completed' } : apt
-        ));
-        
-        setIsConsultationModalOpen(false);
-        setConsultationForm({});
-        setSelectedAppointment(null);
-        toast.success('Consultation completed successfully!');
-      } catch (error) {
-        toast.error('Failed to complete consultation. Please try again.');
-      }
+  const handleCompleteConsultation = async () => {
+    if (!selectedAppointment) return;
+    try {
+      await opdApi.update(selectedAppointment.id, { status: 'completed', ...consultationForm });
+      const newConsultation: OutpatientConsultation = {
+        id: Date.now().toString(),
+        ...consultationForm as OutpatientConsultation
+      };
+      setConsultations([...consultations, newConsultation]);
+      setAppointments(appointments.map(apt =>
+        apt.id === selectedAppointment.id ? { ...apt, status: 'completed' } : apt
+      ));
+      setIsConsultationModalOpen(false);
+      setConsultationForm({});
+      setSelectedAppointment(null);
+      toast.success('Consultation completed successfully!');
+    } catch (error) {
+      toast.error('Failed to complete consultation. Please try again.');
     }
   };
 
@@ -169,10 +168,13 @@ export function OutpatientManagement({ session }: OutpatientManagementProps) {
           <h1 className="text-2xl text-gray-900">Outpatient Management</h1>
           <p className="text-muted-foreground">Manage outpatient appointments and consultations</p>
         </div>
-        <Button onClick={() => setIsAppointmentModalOpen(true)} className="bg-primary hover:bg-primary/90">
-          <Plus className="size-4 mr-2" />
-          New Appointment
-        </Button>
+        <div className="flex items-center gap-2">
+          <VoiceAgent department="outpatient" userRole={session?.role || 'receptionist'} />
+          <Button onClick={() => setIsAppointmentModalOpen(true)} className="bg-primary hover:bg-primary/90">
+            <Plus className="size-4 mr-2" />
+            New Appointment
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -451,22 +453,24 @@ export function OutpatientManagement({ session }: OutpatientManagementProps) {
                 toast.error('Please fill in all required fields');
                 return;
               }
-              
               setLoading(true);
               try {
-                const newAppointment: OutpatientAppointment = {
-                  id: Date.now().toString(),
-                  ...appointmentForm as OutpatientAppointment,
+                const newAppointment = await opdApi.create({
+                  patient_name: appointmentForm.patientName,
+                  doctor_name: appointmentForm.doctorName,
+                  department: appointmentForm.department,
+                  appointment_date: appointmentForm.appointmentDate,
+                  appointment_time: appointmentForm.appointmentTime,
+                  type: appointmentForm.type,
+                  insurance: appointmentForm.insurance,
+                  mobileno: appointmentForm.phone,
+                  patientId: appointmentForm.patientId,
                   status: 'scheduled'
-                };
-                
-                const { data } = await DatabaseService.createOutpatientAppointment(newAppointment);
-                if (data) {
-                  setAppointments([...appointments, data]);
-                  setAppointmentForm({});
-                  setIsAppointmentModalOpen(false);
-                  toast.success('Appointment scheduled successfully!');
-                }
+                });
+                setAppointments([...appointments, newAppointment]);
+                setAppointmentForm({});
+                setIsAppointmentModalOpen(false);
+                toast.success('Appointment scheduled successfully!');
               } catch (error) {
                 console.error('Error scheduling appointment:', error);
                 toast.error('Failed to schedule appointment');

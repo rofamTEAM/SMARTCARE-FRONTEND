@@ -209,15 +209,13 @@ export const applyTheme = (theme: ColorTheme) => {
 };
 
 export const getCurrentTheme = (): string => {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('hospital-color-theme') || 'blue';
-  }
+  // Theme is kept in memory only - default to 'blue'
+  // For persistent theme storage, use backend API
   return 'blue';
 };
 
 export const setCurrentTheme = (themeKey: string) => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('hospital-color-theme', themeKey);
     const theme = colorThemes[themeKey];
     if (theme) {
       applyTheme(theme);

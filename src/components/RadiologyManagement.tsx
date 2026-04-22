@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { radiologyApi } from '../utils/api';
+import { VoiceAgent } from './VoiceAgent';
+
+interface RadiologyTest {
   id: string;
   patientId: string;
   patientName: string;
@@ -115,7 +118,9 @@ export function RadiologyManagement({ session }: RadiologyManagementProps) {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Radiology Management</CardTitle>
-              <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+              <div className="flex items-center gap-2">
+                <VoiceAgent department="radiology" userRole={session?.role || 'doctor'} />
+                <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
                 <DialogTrigger asChild>
                   <Button onClick={() => setFormData({})}>
                     <Plus className="size-4 mr-2" />
@@ -211,6 +216,7 @@ export function RadiologyManagement({ session }: RadiologyManagementProps) {
                   </div>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
           </CardHeader>
           <CardContent>

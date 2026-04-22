@@ -25,31 +25,18 @@ import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { DatabaseService } from '../utils/supabase/database';
+import { ipdApi } from '../utils/api';
+import { VoiceAgent } from './VoiceAgent';
+import { InpatientAdmission } from '@/types/patient';
 
 interface InpatientBed {
   id: string;
   bedNumber: string;
   ward: string;
   status: 'available' | 'occupied' | 'maintenance' | 'reserved';
-  patientId?: string;
   patientName?: string;
   admissionDate?: string;
   condition?: string;
-}
-
-interface InpatientAdmission {
-  id: string;
-  patientId: string;
-  patientName: string;
-  bedId: string;
-  ward: string;
-  admissionDate: string;
-  admissionType: 'emergency' | 'elective' | 'transfer';
-  condition: string;
-  attendingDoctor: string;
-  status: 'admitted' | 'discharged' | 'transferred';
-  estimatedDischarge?: string;
 }
 
 interface VitalSigns {
@@ -101,11 +88,10 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
   const fetchData = async () => {
     try {
       const [bedsData, admissionsData] = await Promise.all([
-        DatabaseService.getBeds(),
-        DatabaseService.getInpatientAdmissions()
+        ipdApi.getAll(),
+        ipdApi.getAll(),
       ]);
-      setBeds(bedsData.data);
-      setAdmissions(admissionsData.data);
+      setAdmissions(Array.isArray(admissionsData) ? admissionsData : []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to load data');
@@ -144,42 +130,29 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
   };
 
   const handleAdmitPatient = async () => {
-    if (!admissionForm.patientName || !admissionForm.ward) {
+    if (!admissionForm.patient_name || !admissionForm.ward) {
       toast.error('Please fill in all required fields');
       return;
     }
-
     setLoading(true);
     try {
-      const availableBed = beds.find(bed => bed.status === 'available' && bed.ward === admissionForm.ward);
-      if (availableBed) {
-        const newAdmission: InpatientAdmission = {
-          id: Date.now().toString(),
-          ...admissionForm as InpatientAdmission,
-          bedId: availableBed.id,
-          admissionDate: new Date().toISOString().split('T')[0],
-          status: 'admitted'
-        };
-        
-        const { data } = await DatabaseService.createInpatientAdmission(newAdmission);
-        if (data) {
-          setAdmissions([...admissions, data]);
-          setBeds(beds.map(bed => 
-            bed.id === availableBed.id 
-              ? { ...bed, status: 'occupied', patientId: newAdmission.patientId, patientName: newAdmission.patientName, admissionDate: newAdmission.admissionDate, condition: newAdmission.condition }
-              : bed
-          ));
-          
-          setAdmissionForm({});
-          setIsAdmissionModalOpen(false);
-          toast.success('Patient admitted successfully!');
-        }
-      } else {
-        toast.error('No available beds in selected ward');
-      }
+      const newAdmission = await ipdApi.create({
+        patient_name: admissionForm.patient_name,
+        ward: admissionForm.ward,
+        admission_type: admissionForm.admission_type || 'elective',
+        condition: admissionForm.condition || 'Stable',
+        attending_doctor: admissionForm.attending_doctor || '',
+        patientId: admissionForm.patientId,
+        admission_date: new Date().toISOString().split('T')[0],
+        status: 'admitted',
+      });
+      setAdmissions([...admissions, newAdmission]);
+      setAdmissionForm({});
+      setIsAdmissionModalOpen(false);
+      toast.success('Patient admitted successfully!');
     } catch (error) {
       console.error('Error admitting patient:', error);
-      toast.error('Failed to admit patient');
+      toast.error('Failed to admit patient. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -192,7 +165,7 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
         patientId: selectedPatient.patientId,
         date: new Date().toISOString().split('T')[0],
         time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-        recordedBy: session?.user?.user_metadata?.name || 'Nurse',
+        recordedBy: session?.name || 'Nurse',
         ...vitalsForm as Omit<VitalSigns, 'id' | 'patientId' | 'date' | 'time' | 'recordedBy'>
       };
       
@@ -202,18 +175,15 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
     }
   };
 
-  const handleDischarge = (admissionId: string) => {
-    setAdmissions(admissions.map(admission => 
-      admission.id === admissionId ? { ...admission, status: 'discharged' } : admission
-    ));
-    
-    const admission = admissions.find(a => a.id === admissionId);
-    if (admission) {
-      setBeds(beds.map(bed => 
-        bed.id === admission.bedId 
-          ? { ...bed, status: 'available', patientId: undefined, patientName: undefined, admissionDate: undefined, condition: undefined }
-          : bed
+  const handleDischarge = async (admissionId: string) => {
+    try {
+      await ipdApi.discharge(admissionId, { discharged: 'yes' });
+      setAdmissions(admissions.map(admission =>
+        admission.id === admissionId ? { ...admission, status: 'discharged' } : admission
       ));
+      toast.success('Patient discharged successfully!');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to discharge patient.');
     }
   };
 
@@ -224,10 +194,13 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
           <h1 className="text-2xl text-gray-900">Inpatient Management</h1>
           <p className="text-muted-foreground">Manage hospital admissions, beds, and inpatient care</p>
         </div>
-        <Button onClick={() => setIsAdmissionModalOpen(true)} className="bg-primary hover:bg-primary/90">
-          <Plus className="size-4 mr-2" />
-          New Admission
-        </Button>
+        <div className="flex items-center gap-2">
+          <VoiceAgent department="inpatient" userRole={session?.role || 'nurse'} />
+          <Button onClick={() => setIsAdmissionModalOpen(true)} className="bg-primary hover:bg-primary/90">
+            <Plus className="size-4 mr-2" />
+            New Admission
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -332,7 +305,7 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
                     <div className="flex-1 grid grid-cols-5 gap-4">
                       <div>
                         <p className="text-xs text-muted-foreground">Patient</p>
-                        <p className="text-sm text-gray-900">{admission.patientName}</p>
+                        <p className="text-sm text-gray-900">{admission.patient_name}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Ward/Bed</p>
@@ -340,11 +313,11 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Admission Date</p>
-                        <p className="text-sm text-gray-900">{admission.admissionDate}</p>
+                        <p className="text-sm text-gray-900">{admission.admission_date}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Doctor</p>
-                        <p className="text-sm text-gray-900">{admission.attendingDoctor}</p>
+                        <p className="text-sm text-gray-900">{admission.attending_doctor}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Condition</p>
@@ -453,8 +426,8 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
                 {admissions.filter(a => a.status === 'admitted').map((admission) => (
                   <div key={admission.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                     <div>
-                      <p className="text-gray-900">{admission.patientName}</p>
-                      <p className="text-sm text-muted-foreground">Est. Discharge: {admission.estimatedDischarge}</p>
+                      <p className="text-gray-900">{admission.patient_name}</p>
+                      <p className="text-sm text-muted-foreground">Est. Discharge: {admission.estimated_discharge}</p>
                     </div>
                     <Button onClick={() => handleDischarge(admission.id)}>
                       <CheckCircle className="size-4 mr-2" />
@@ -480,15 +453,15 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
                 <Label>Patient ID</Label>
                 <Input
                   value={admissionForm.patientId || ''}
-                  onChange={(e) => setAdmissionForm({ ...admissionForm, patientId: e.target.value })}
+                  onChange={(e) => setAdmissionForm({ ...admissionForm, patientId: parseInt(e.target.value) })}
                   placeholder="Enter patient ID"
                 />
               </div>
               <div className="space-y-2">
                 <Label>Patient Name</Label>
                 <Input
-                  value={admissionForm.patientName || ''}
-                  onChange={(e) => setAdmissionForm({ ...admissionForm, patientName: e.target.value })}
+                  value={admissionForm.patient_name || ''}
+                  onChange={(e) => setAdmissionForm({ ...admissionForm, patient_name: e.target.value })}
                   placeholder="Enter patient name"
                 />
               </div>
@@ -509,8 +482,8 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
               <div className="space-y-2">
                 <Label>Admission Type</Label>
                 <select
-                  value={admissionForm.admissionType || ''}
-                  onChange={(e) => setAdmissionForm({ ...admissionForm, admissionType: e.target.value as any })}
+                  value={admissionForm.admission_type || ''}
+                  onChange={(e) => setAdmissionForm({ ...admissionForm, admission_type: e.target.value as any })}
                   className="w-full px-3 py-2 border border-border rounded-md"
                 >
                   <option value="">Select Type</option>
@@ -522,8 +495,8 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
               <div className="space-y-2">
                 <Label>Attending Doctor</Label>
                 <Input
-                  value={admissionForm.attendingDoctor || ''}
-                  onChange={(e) => setAdmissionForm({ ...admissionForm, attendingDoctor: e.target.value })}
+                  value={admissionForm.attending_doctor || ''}
+                  onChange={(e) => setAdmissionForm({ ...admissionForm, attending_doctor: e.target.value })}
                   placeholder="Enter doctor name"
                 />
               </div>

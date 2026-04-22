@@ -76,118 +76,55 @@ export function BedSetup({ session }: BedSetupProps) {
     }
   };
 
-  const saveFloors = async (updatedFloors: Floor[]) => { setFloors(updatedFloors); };
-  const saveBedGroups = async (updatedBedGroups: BedGroup[]) => { setBedGroups(updatedBedGroups); };
-  const saveBedTypes = async (updatedBedTypes: BedType[]) => { setBedTypes(updatedBedTypes); };
-  const saveBeds = async (updatedBeds: BedItem[]) => { setBeds(updatedBeds); };
-
-  const handleAdd = () => {
-    if (!formData.name) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const newItem = {
-        id: Date.now().toString(),
-        ...formData,
-        createdAt: new Date().toISOString()
-      };
-
-      switch (activeTab) {
-        case 'floors':
-          saveFloors([...floors, newItem]);
-          break;
-        case 'bedGroups':
-          saveBedGroups([...bedGroups, newItem]);
-          break;
-        case 'bedTypes':
-          saveBedTypes([...bedTypes, newItem]);
-          break;
-        case 'beds':
-          saveBeds([...beds, { ...newItem, status: 'Available' }]);
-          break;
-      }
-
-      setFormData({});
-      setIsModalOpen(false);
-      toast.success(`${activeTab.slice(0, -1)} added successfully!`);
-    } catch (error) {
-      console.error('Error adding item:', error);
-      toast.error('Failed to add item. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEdit = (item: any) => {
-    setSelectedItem(item);
-    setFormData(item);
-    setIsModalOpen(true);
-  };
-
-  const handleUpdate = () => {
-    if (!selectedItem || !formData.name) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
+  const handleAdd = async () => {
+    if (!formData.name) { toast.error('Please fill in all required fields'); return; }
     setLoading(true);
     try {
       switch (activeTab) {
-        case 'floors':
-          const updatedFloors = floors.map(f => f.id === selectedItem.id ? { ...f, ...formData } : f);
-          saveFloors(updatedFloors);
-          break;
-        case 'bedGroups':
-          const updatedBedGroups = bedGroups.map(bg => bg.id === selectedItem.id ? { ...bg, ...formData } : bg);
-          saveBedGroups(updatedBedGroups);
-          break;
-        case 'bedTypes':
-          const updatedBedTypes = bedTypes.map(bt => bt.id === selectedItem.id ? { ...bt, ...formData } : bt);
-          saveBedTypes(updatedBedTypes);
-          break;
-        case 'beds':
-          const updatedBeds = beds.map(b => b.id === selectedItem.id ? { ...b, ...formData } : b);
-          saveBeds(updatedBeds);
-          break;
+        case 'floors': { const r = await bedsApi.create({ ...formData, type: 'floor' }); setFloors([...floors, r]); break; }
+        case 'bedGroups': { const r = await bedsApi.create({ ...formData, type: 'group' }); setBedGroups([...bedGroups, r]); break; }
+        case 'bedTypes': { const r = await bedsApi.create({ ...formData, type: 'bedtype' }); setBedTypes([...bedTypes, r]); break; }
+        case 'beds': { const r = await bedsApi.create({ ...formData, status: 'Available' }); setBeds([...beds, r]); break; }
       }
-
-      setSelectedItem(null);
-      setFormData({});
-      setIsModalOpen(false);
-      toast.success(`${activeTab.slice(0, -1)} updated successfully!`);
-    } catch (error) {
-      console.error('Error updating item:', error);
-      toast.error('Failed to update item. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+      setFormData({}); setIsModalOpen(false);
+      toast.success('Added successfully!');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to add item.');
+    } finally { setLoading(false); }
   };
 
-  const handleDelete = (id: string) => {
+  const handleEdit = (item: any) => { setSelectedItem(item); setFormData(item); setIsModalOpen(true); };
+
+  const handleUpdate = async () => {
+    if (!selectedItem || !formData.name) { toast.error('Please fill in all required fields'); return; }
+    setLoading(true);
+    try {
+      switch (activeTab) {
+        case 'floors': { const r = await bedsApi.update(selectedItem.id, formData); setFloors(floors.map(f => f.id === selectedItem.id ? r : f)); break; }
+        case 'bedGroups': { const r = await bedsApi.update(selectedItem.id, formData); setBedGroups(bedGroups.map(bg => bg.id === selectedItem.id ? r : bg)); break; }
+        case 'bedTypes': { const r = await bedsApi.update(selectedItem.id, formData); setBedTypes(bedTypes.map(bt => bt.id === selectedItem.id ? r : bt)); break; }
+        case 'beds': { const r = await bedsApi.update(selectedItem.id, formData); setBeds(beds.map(b => b.id === selectedItem.id ? r : b)); break; }
+      }
+      setSelectedItem(null); setFormData({}); setIsModalOpen(false);
+      toast.success('Updated successfully!');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update item.');
+    } finally { setLoading(false); }
+  };
+
+  const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this item?')) return;
-    
     try {
+      await bedsApi.delete(id);
       switch (activeTab) {
-        case 'floors':
-          saveFloors(floors.filter(f => f.id !== id));
-          break;
-        case 'bedGroups':
-          saveBedGroups(bedGroups.filter(bg => bg.id !== id));
-          break;
-        case 'bedTypes':
-          saveBedTypes(bedTypes.filter(bt => bt.id !== id));
-          break;
-        case 'beds':
-          saveBeds(beds.filter(b => b.id !== id));
-          break;
+        case 'floors': setFloors(floors.filter(f => f.id !== id)); break;
+        case 'bedGroups': setBedGroups(bedGroups.filter(bg => bg.id !== id)); break;
+        case 'bedTypes': setBedTypes(bedTypes.filter(bt => bt.id !== id)); break;
+        case 'beds': setBeds(beds.filter(b => b.id !== id)); break;
       }
-      toast.success('Item deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting item:', error);
-      toast.error('Failed to delete item. Please try again.');
+      toast.success('Deleted successfully!');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete item.');
     }
   };
 

@@ -113,35 +113,26 @@ export function useSettings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load settings from API or localStorage
+  // Load settings from API only
   const loadSettings = useCallback(async () => {
     setLoading(true);
     setError(null);
     
     try {
-      // Try to load from API first
+      // Load from API only - no localStorage fallback
       const apiSettings = await SettingsService.getSettings();
       setSettings({ ...defaultSettings, ...apiSettings });
     } catch (apiError) {
-      console.warn('Failed to load from API, trying localStorage:', apiError);
-      
-      // Fallback to localStorage
-      try {
-        const localSettings = localStorage.getItem('superadmin_settings');
-        if (localSettings) {
-          const parsed = JSON.parse(localSettings);
-          setSettings({ ...defaultSettings, ...parsed });
-        }
-      } catch (localError) {
-        console.error('Failed to load from localStorage:', localError);
-        setError('Failed to load settings');
-      }
+      console.error('Failed to load settings from API:', apiError);
+      setError('Failed to load settings');
+      // Use default settings if API fails
+      setSettings(defaultSettings);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Save settings to API and localStorage
+  // Save settings to API only
   const saveSettings = useCallback(async (newSettings?: Partial<SystemSettings>) => {
     setSaving(true);
     setError(null);
@@ -149,11 +140,8 @@ export function useSettings() {
     const settingsToSave = newSettings || settings;
     
     try {
-      // Save to API
+      // Save to API only - no localStorage backup
       await SettingsService.saveSettings(settingsToSave);
-      
-      // Save to localStorage as backup
-      localStorage.setItem('superadmin_settings', JSON.stringify(settingsToSave));
       
       if (newSettings) {
         setSettings(prev => ({ ...prev, ...newSettings }));

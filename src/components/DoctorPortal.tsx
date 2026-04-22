@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Calendar,
@@ -18,28 +18,72 @@ import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { TodoListWidget } from './TodoListWidget';
+import { appointmentsService } from '@/services/appointments.service';
 
 interface DoctorPortalProps {
   session: any;
 }
 
 export function DoctorPortal({ session }: DoctorPortalProps) {
-  const doctorName = session?.user?.user_metadata?.name || 'Doctor';
+  const doctorName = session?.name || 'Doctor';
+  const doctorId = session?.id;
+  const [todayAppointments, setTodayAppointments] = useState<any[]>([]);
+  const [stats, setStats] = useState([
+    { label: 'Today\'s Appointments', value: '0', icon: Calendar, color: 'bg-primary' },
+    { label: 'Patients Treated', value: '0', icon: Users, color: 'bg-primary' },
+    { label: 'Pending Consultations', value: '0', icon: Clock, color: 'bg-amber-500' },
+    { label: 'Lab Reports', value: '0', icon: FileText, color: 'bg-primary' },
+  ]);
+  const [loading, setLoading] = useState(true);
 
-  const stats = [
-    { label: 'Today\'s Appointments', value: '12', icon: Calendar, color: 'bg-primary' },
-    { label: 'Patients Treated', value: '8', icon: Users, color: 'bg-primary' },
-    { label: 'Pending Consultations', value: '4', icon: Clock, color: 'bg-amber-500' },
-    { label: 'Lab Reports', value: '15', icon: FileText, color: 'bg-primary' },
-  ];
+  useEffect(() => {
+    fetchDoctorAppointments();
+  }, [doctorId]);
 
-  const todayAppointments = [
-    { id: '1', time: '09:00 AM', patient: 'John Smith', type: 'Consultation', status: 'completed' },
-    { id: '2', time: '10:00 AM', patient: 'Sarah Johnson', type: 'Follow-up', status: 'completed' },
-    { id: '3', time: '11:30 AM', patient: 'Michael Brown', type: 'New Patient', status: 'in-progress' },
-    { id: '4', time: '02:00 PM', patient: 'Emily Davis', type: 'Consultation', status: 'scheduled' },
-    { id: '5', time: '03:30 PM', patient: 'Robert Wilson', type: 'Follow-up', status: 'scheduled' },
-  ];
+  const fetchDoctorAppointments = async () => {
+    try {
+      setLoading(true);
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Fetch all appointments and filter by doctor
+      const appointments = await appointmentsService.getAll();
+      
+      // Filter appointments for this doctor
+      const doctorAppointments = appointments.filter(apt => 
+        apt.doctorId === doctorId || apt.doctorId === doctorName
+      );
+      
+      // Get today's appointments
+      const todayAppts = doctorAppointments.filter(apt => apt.appointmentDate === today);
+      
+      // Format appointments for display
+      const formattedAppts = todayAppts.map(apt => ({
+        id: apt.id,
+        time: apt.appointmentTime,
+        patient: apt.patientId,
+        type: apt.reason || 'Consultation',
+        status: apt.status === 'scheduled' ? 'scheduled' : apt.status === 'completed' ? 'completed' : 'in-progress',
+      }));
+      
+      setTodayAppointments(formattedAppts);
+      
+      // Update stats
+      const completed = doctorAppointments.filter(a => a.status === 'completed').length;
+      const scheduled = doctorAppointments.filter(a => a.status === 'scheduled').length;
+      
+      setStats([
+        { label: 'Today\'s Appointments', value: todayAppts.length.toString(), icon: Calendar, color: 'bg-primary' },
+        { label: 'Patients Treated', value: completed.toString(), icon: Users, color: 'bg-primary' },
+        { label: 'Pending Consultations', value: scheduled.toString(), icon: Clock, color: 'bg-amber-500' },
+        { label: 'Lab Reports', value: '15', icon: FileText, color: 'bg-primary' },
+      ]);
+    } catch (error) {
+      console.error('Failed to fetch doctor appointments:', error);
+      setTodayAppointments([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const recentPatients = [
     { id: '1', name: 'John Smith', diagnosis: 'Hypertension', lastVisit: '2 hours ago', status: 'stable' },

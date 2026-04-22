@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 interface UserManagementProps {
   session: any;
@@ -22,34 +22,77 @@ export function UserManagement({ session }: UserManagementProps) {
   const [newRole, setNewRole] = useState('');
   const [newUserData, setNewUserData] = useState({ name: '', email: '', password: '', role: 'user' });
 
-  const userRole = session?.user?.user_metadata?.role || 'user';
+  const userRole = session?.role || 'user';
   const isSuperAdmin = userRole === 'super_admin';
+  const userId = session?.user?.id || session?.id;
+
+  // Handle user creation updates from WebSocket/polling
+  const handleUserCreated = (data: any) => {
+    console.log('[USER MANAGEMENT] User created event received:', data);
+    // Refresh users list when new user is created
+    fetchUsers();
+  };
+
+  // Initialize WebSocket with user creation handler
+  useWebSocket({
+    userId,
+    role: userRole,
+    onUserCreated: handleUserCreated,
+    enabled: isSuperAdmin // Only enable for super admins
+  });
 
   useEffect(() => {
     fetchUsers();
-    const interval = setInterval(fetchUsers, 10000); // Auto-refresh every 10 seconds
-    return () => clearInterval(interval);
   }, []);
+
+  // Debug: Log when users state changes
+  useEffect(() => {
+    console.log('[USER MANAGEMENT] Users state updated:', users);
+    console.log('[USER MANAGEMENT] Users count:', users.length);
+  }, [users]);
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-d8a3a34f/users`,
-        {
-          headers: {
-            Authorization: `Bearer ${session?.access_token}`,
-          },
+      const { apiClient } = await import('../services/apiClient');
+      const response = await apiClient.get<any>('/users');
+      
+      console.log('[FETCH USERS] Raw response:', response);
+      console.log('[FETCH USERS] Response type:', typeof response);
+      console.log('[FETCH USERS] Response keys:', Object.keys(response || {}));
+      console.log('[FETCH USERS] Response.users:', (response as any)?.users);
+      console.log('[FETCH USERS] Is response.users an array?', Array.isArray((response as any)?.users));
+      
+      // apiClient already handles field conversion and unwraps the response
+      // Response should be { users: [...] } after apiClient processing
+      let usersArray: any[] = [];
+      
+      if (Array.isArray(response)) {
+        console.log('[FETCH USERS] Response is array, length:', response.length);
+        usersArray = response;
+      } else if ((response as any)?.users && Array.isArray((response as any).users)) {
+        console.log('[FETCH USERS] Response has users array, length:', (response as any).users.length);
+        usersArray = (response as any).users;
+      } else if ((response as any)?.data && Array.isArray((response as any).data)) {
+        console.log('[FETCH USERS] Response has data array, length:', (response as any).data.length);
+        usersArray = (response as any).data;
+      } else if (typeof response === 'object' && response !== null) {
+        console.log('[FETCH USERS] Response is object, trying to extract values');
+        // If it's an object but not an array, try to extract users
+        const values = Object.values(response).filter(item => typeof item === 'object' && item !== null && Array.isArray(item));
+        if (values.length > 0) {
+          console.log('[FETCH USERS] Found array in values, length:', values[0].length);
+          usersArray = values[0];
         }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch users');
       }
-
-      const data = await response.json();
-      setUsers(data.users || []);
+      
+      console.log('[FETCH USERS] Final users array length:', usersArray.length);
+      console.log('[FETCH USERS] Final users array:', usersArray);
+      console.log('[FETCH USERS] Setting users state with:', usersArray);
+      setUsers(Array.isArray(usersArray) ? usersArray : []);
+      console.log('[FETCH USERS] State updated, users.length should be:', usersArray.length);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('[FETCH USERS] Error:', error);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -59,21 +102,11 @@ export function UserManagement({ session }: UserManagementProps) {
     if (!selectedUser || !newRole) return;
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-d8a3a34f/users/${selectedUser.id}/role`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({ role: newRole }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to update user role');
-      }
+      const { apiClient } = await import('../services/apiClient');
+      await apiClient.put('/rbac/role-permission', { 
+        userId: selectedUser.id, 
+        role: newRole 
+      });
 
       await fetchUsers();
       setShowRoleModal(false);
@@ -98,29 +131,39 @@ export function UserManagement({ session }: UserManagementProps) {
     }
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-d8a3a34f/signup`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify(newUserData),
-        }
-      );
+      setLoading(true);
+      // Use apiClient which handles authentication and credentials
+      const { apiClient } = await import('../services/apiClient');
+      
+      console.log('[CREATE USER] Sending request with:', {
+        name: newUserData.name,
+        email: newUserData.email,
+        roleEnum: newUserData.role?.toUpperCase() || 'USER',
+      });
+      
+      const response = await apiClient.post('/users', {
+        name: newUserData.name,
+        email: newUserData.email,
+        password: newUserData.password,
+        roleEnum: newUserData.role?.toUpperCase() || 'USER',
+      });
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create user');
-      }
-
-      await fetchUsers();
+      console.log('[CREATE USER] User created successfully:', response);
+      
+      // Close modal BEFORE fetching to avoid state conflicts
       setShowCreateModal(false);
       setNewUserData({ name: '', email: '', password: '', role: 'user' });
+      
+      // Now fetch users
+      console.log('[CREATE USER] Fetching updated user list...');
+      await fetchUsers();
+      
       toast.success(`User created successfully! Welcome ${newUserData.name}`);
     } catch (error: any) {
-      toast.error(`Failed to create user: ${error.message}`);
+      console.error('[CREATE USER] Error:', error);
+      toast.error(`Failed to create user: ${error.message || error}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -128,19 +171,8 @@ export function UserManagement({ session }: UserManagementProps) {
     if (!confirm('Are you sure you want to delete this user?')) return;
 
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-d8a3a34f/users/${userId}`,
-        {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to delete user');
-      }
+      const { apiClient } = await import('../services/apiClient');
+      await apiClient.delete(`/users/${userId}`);
 
       await fetchUsers();
       toast.success('User deleted successfully');
@@ -150,12 +182,12 @@ export function UserManagement({ session }: UserManagementProps) {
     }
   };
 
-  const filteredUsers = users.filter(
+  const filteredUsers = Array.isArray(users) ? users.filter(
     (user) =>
       user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.role?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ) : [];
 
   const getRoleIcon = (role: string) => {
     switch (role) {

@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '../ui/label';
 import { toast } from 'sonner';
 import { chargesApi } from '../../utils/api';
-import { chargesApi } from '../../utils/api';
+
+interface ChargeCategory {
   id: string;
   name: string;
   description: string;

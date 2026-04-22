@@ -9,10 +9,9 @@ interface ProfileEditProps {
   open: boolean;
   onClose: () => void;
   session: any;
-  supabase: any;
 }
 
-export function ProfileEdit({ open, onClose, session, supabase }: ProfileEditProps) {
+export function ProfileEdit({ open, onClose, session }: ProfileEditProps) {
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);

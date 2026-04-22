@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { vehiclesApi } from '../utils/api';
+import { VoiceAgent } from './VoiceAgent';
+
+interface Vehicle {
   id: string;
   vehicleNo: string;
   vehicleModel: string;
@@ -122,7 +125,9 @@ export function VehicleManagement({ session }: VehicleManagementProps) {
                 <Car className="size-5" />
                 Vehicle Management
               </CardTitle>
-              <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+              <div className="flex items-center gap-2">
+                <VoiceAgent department="ambulance" userRole={session?.role || 'admin'} />
+                <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
                 <DialogTrigger asChild>
                   <Button onClick={() => setFormData({})}>
                     <Plus className="size-4 mr-2" />
@@ -276,6 +281,7 @@ export function VehicleManagement({ session }: VehicleManagementProps) {
                   </div>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
           </CardHeader>
           <CardContent>

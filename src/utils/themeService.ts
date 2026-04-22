@@ -118,16 +118,8 @@ class ThemeService {
       return themeColors[0];
     }
     
-    try {
-      const savedTheme = localStorage.getItem('hospital_theme');
-      if (savedTheme) {
-        const themeName = JSON.parse(savedTheme);
-        const theme = themeColors.find(t => t.name === themeName);
-        if (theme) return theme;
-      }
-    } catch (error) {
-      console.error('Error loading theme:', error);
-    }
+    // Theme is kept in memory only - no localStorage persistence
+    // For persistent theme storage, use backend API
     return themeColors[0];
   }
 
@@ -142,7 +134,6 @@ class ThemeService {
     this.currentTheme = theme;
     if (this.isClient) {
       this.applyTheme(theme);
-      this.saveTheme(theme);
       
       // Dispatch theme change event for components to react
       window.dispatchEvent(new CustomEvent('themeChanged', { 
@@ -209,13 +200,8 @@ class ThemeService {
   }
 
   private saveTheme(theme: ThemeColor): void {
-    if (!this.isClient) return;
-    
-    try {
-      localStorage.setItem('hospital_theme', JSON.stringify(theme.name));
-    } catch (error) {
-      console.error('Error saving theme:', error);
-    }
+    // Theme is kept in memory only - no localStorage persistence
+    // For persistent theme storage, use backend API
   }
 
   public getCurrentTheme(): ThemeColor {

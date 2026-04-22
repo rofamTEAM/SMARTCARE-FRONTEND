@@ -98,7 +98,7 @@ export function PerformanceManagement({ session }: { session: any }) {
       goals: reviewFormData.goals || [],
       achievements: reviewFormData.achievements || [],
       feedback: reviewFormData.feedback || '',
-      reviewedBy: session?.user?.user_metadata?.name || 'Admin',
+      reviewedBy: session?.name || 'Admin',
       reviewDate: new Date().toISOString().split('T')[0],
       status: 'Draft'
     };

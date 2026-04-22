@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { complaintsApi } from '../utils/api';
+import { VoiceAgent } from './VoiceAgent';
+
+interface Complaint {
   id: string;
   complaintBy: string;
   complaintType: string;
@@ -147,7 +150,9 @@ export function ComplaintManagement({ session }: ComplaintManagementProps) {
                 <MessageSquare className="size-5" />
                 Complaint Management
               </CardTitle>
-              <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+              <div className="flex items-center gap-2">
+                <VoiceAgent department="front-office" userRole={session?.role || 'receptionist'} />
+                <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
                 <DialogTrigger asChild>
                   <Button onClick={() => setFormData({})}>
                     <Plus className="size-4 mr-2" />
@@ -263,6 +268,7 @@ export function ComplaintManagement({ session }: ComplaintManagementProps) {
                   </div>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
           </CardHeader>
           <CardContent>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Search, Edit, Trash2, Eye } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Eye, Trash } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -8,8 +8,30 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { patientsApi } from '../utils/api';
+import { VoiceAgent } from './VoiceAgent';
+import { useFormSubmit } from '../hooks/useFormSubmit';
 
-
+interface Patient {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  age?: number;
+  gender?: string;
+  bloodType?: string;
+  address?: string;
+  condition?: string;
+  admissionDate?: string;
+  patientType?: string;
+  guardianName?: string;
+  guardianPhone?: string;
+  guardianAddress?: string;
+  guardianEmail?: string;
+  maritalStatus?: string;
+  knownAllergies?: string;
+  organisation?: string;
+  note?: string;
+}
 
 interface PatientsPageProps {
   session: any;
@@ -21,7 +43,20 @@ export function PatientsPage({ session }: PatientsPageProps) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [formData, setFormData] = useState<Partial<Patient>>({});
-  const [loading, setLoading] = useState(false);
+  const [selectedPatientIds, setSelectedPatientIds] = useState<Set<string>>(new Set());
+  const [isDeleteAllLoading, setIsDeleteAllLoading] = useState(false);
+  
+  const { submit: submitAdd, loading: addLoading } = useFormSubmit({
+    successMessage: 'Patient added successfully!',
+    errorMessage: 'Failed to add patient. Please try again.',
+  });
+
+  const { submit: submitUpdate, loading: updateLoading } = useFormSubmit({
+    successMessage: 'Patient updated successfully!',
+    errorMessage: 'Failed to update patient. Please try again.',
+  });
+
+  const loading = addLoading || updateLoading;
 
   useEffect(() => {
     fetchPatients();
@@ -30,8 +65,33 @@ export function PatientsPage({ session }: PatientsPageProps) {
   const fetchPatients = async () => {
     try {
       const data = await patientsApi.getAll();
-      setPatients(data || []);
+      // Transform snake_case to camelCase
+      const transformedPatients = (data || []).map((patient: any) => ({
+        id: patient.id?.toString() || '',
+        name: patient.patient_name || patient.patientName || '',
+        phone: patient.mobileno || patient.phone || '',
+        email: patient.email || '',
+        age: patient.age ? parseInt(patient.age) : 0,
+        gender: patient.gender || '',
+        bloodType: patient.blood_group || patient.bloodGroup || '',
+        address: patient.address || '',
+        condition: patient.condition || 'Stable',
+        admissionDate: patient.admission_date || patient.admissionDate || '',
+        patientType: patient.patient_type || patient.patientType || '',
+        guardianName: patient.guardian_name || patient.guardianName || '',
+        guardianPhone: patient.guardian_phone || patient.guardianPhone || '',
+        guardianAddress: patient.guardian_address || patient.guardianAddress || '',
+        guardianEmail: patient.guardian_email || patient.guardianEmail || '',
+        maritalStatus: patient.marital_status || patient.maritalStatus || '',
+        knownAllergies: patient.known_allergies || patient.knownAllergies || '',
+        organisation: patient.organisation || '',
+        note: patient.note || ''
+      }));
+      setPatients(transformedPatients);
     } catch (error) {
+      console.error('Error fetching patients:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load patients. Please try again.';
+      toast.error(errorMessage);
       setPatients([]);
     }
   };
@@ -48,44 +108,93 @@ export function PatientsPage({ session }: PatientsPageProps) {
       return;
     }
 
-    setLoading(true);
+    if (!formData.address) {
+      toast.error('Please fill in all required fields (Address is required)');
+      return;
+    }
+
     try {
-      const newPatient = {
-        id: Date.now().toString(),
-        name: formData.name,
-        phone: formData.phone,
-        email: formData.email || '',
-        address: formData.address || '',
-        age: formData.age || 0,
-        gender: formData.gender || '',
-        bloodType: formData.bloodType || '',
-        patientType: formData.patientType || 'outpatient',
-        condition: formData.condition || 'Stable',
-        admissionDate: formData.admissionDate || new Date().toISOString().split('T')[0],
-        date_of_birth: formData.admissionDate || '',
-        medical_history: formData.condition || '',
-        workflow_stage: 'registration',
-        workflow_status: 'active',
-        created_at: new Date().toISOString()
-      };
-      
-      const savedPatient = await patientsApi.create(newPatient);
-      setPatients([...patients, savedPatient]);
-      
-      setFormData({});
-      setIsAddModalOpen(false);
-      toast.success('Patient added successfully!');
+      await submitAdd(async () => {
+        const newPatient = {
+          patientName: formData.name,
+          mobileno: formData.phone,
+          email: formData.email || '',
+          address: formData.address,
+          age: formData.age ? String(formData.age) : '0',
+          gender: formData.gender || '',
+          bloodGroup: formData.bloodType || 'Unknown',
+          patientType: formData.patientType || 'General',
+          dob: formData.admissionDate || null,
+          guardianName: formData.guardianName || '',
+          guardianPhone: formData.guardianPhone || '',
+          guardianAddress: formData.guardianAddress || '',
+          guardianEmail: formData.guardianEmail || '',
+          maritalStatus: formData.maritalStatus || 'Single',
+          knownAllergies: formData.knownAllergies || 'None',
+          organisation: formData.organisation || 'Self',
+          note: formData.note || ''
+        };
+        
+        const savedPatient = await patientsApi.create(newPatient);
+        
+        // Transform snake_case response to camelCase
+        const transformedPatient: Patient = {
+          id: savedPatient.id?.toString() || '',
+          name: savedPatient.patient_name || savedPatient.patientName || '',
+          phone: savedPatient.mobileno || savedPatient.phone || '',
+          email: savedPatient.email || '',
+          age: savedPatient.age ? parseInt(savedPatient.age) : 0,
+          gender: savedPatient.gender || '',
+          bloodType: savedPatient.blood_group || savedPatient.bloodGroup || '',
+          address: savedPatient.address || '',
+          condition: savedPatient.condition || 'Stable',
+          admissionDate: savedPatient.admission_date || savedPatient.admissionDate || '',
+          patientType: savedPatient.patient_type || savedPatient.patientType || '',
+          guardianName: savedPatient.guardian_name || savedPatient.guardianName || '',
+          guardianPhone: savedPatient.guardian_phone || savedPatient.guardianPhone || '',
+          guardianAddress: savedPatient.guardian_address || savedPatient.guardianAddress || '',
+          guardianEmail: savedPatient.guardian_email || savedPatient.guardianEmail || '',
+          maritalStatus: savedPatient.marital_status || savedPatient.maritalStatus || '',
+          knownAllergies: savedPatient.known_allergies || savedPatient.knownAllergies || '',
+          organisation: savedPatient.organisation || '',
+          note: savedPatient.note || ''
+        };
+        
+        setPatients([...patients, transformedPatient]);
+        
+        setFormData({});
+        setIsAddModalOpen(false);
+        
+        return transformedPatient;
+      });
     } catch (error) {
       console.error('Error adding patient:', error);
-      toast.error('Failed to add patient. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleEdit = (patient: Patient) => {
     setSelectedPatient(patient);
-    setFormData(patient);
+    // Ensure form data has all fields properly set
+    setFormData({
+      name: patient.name,
+      phone: patient.phone,
+      email: patient.email,
+      age: patient.age,
+      gender: patient.gender,
+      bloodType: patient.bloodType,
+      address: patient.address,
+      condition: patient.condition,
+      admissionDate: patient.admissionDate,
+      patientType: patient.patientType,
+      guardianName: patient.guardianName,
+      guardianPhone: patient.guardianPhone,
+      guardianAddress: patient.guardianAddress,
+      guardianEmail: patient.guardianEmail,
+      maritalStatus: patient.maritalStatus,
+      knownAllergies: patient.knownAllergies,
+      organisation: patient.organisation,
+      note: patient.note
+    });
     setIsAddModalOpen(true);
   };
 
@@ -96,29 +205,64 @@ export function PatientsPage({ session }: PatientsPageProps) {
       return;
     }
     
-    setLoading(true);
+    if (!formData.address) {
+      toast.error('Please fill in all required fields (Address is required)');
+      return;
+    }
     
     try {
-      const updatedPatient = await patientsApi.update(selectedPatient.id, {
-        name: formData.name,
-        phone: formData.phone,
-        email: formData.email,
-        address: formData.address,
-        date_of_birth: formData.admissionDate,
-        gender: formData.gender,
-        medical_history: formData.condition
+      await submitUpdate(async () => {
+        const updatedPatientResponse = await patientsApi.update(selectedPatient.id, {
+          patientName: formData.name,
+          mobileno: formData.phone,
+          email: formData.email,
+          address: formData.address,
+          dob: formData.admissionDate,
+          gender: formData.gender,
+          age: formData.age ? String(formData.age) : '0',
+          bloodGroup: formData.bloodType,
+          guardianName: formData.guardianName,
+          guardianPhone: formData.guardianPhone,
+          guardianAddress: formData.guardianAddress,
+          guardianEmail: formData.guardianEmail,
+          maritalStatus: formData.maritalStatus,
+          knownAllergies: formData.knownAllergies,
+          organisation: formData.organisation,
+          note: formData.note
+        });
+        
+        // Transform snake_case response to camelCase
+        const updatedPatient: Patient = {
+          id: updatedPatientResponse.id?.toString() || selectedPatient.id,
+          name: updatedPatientResponse.patient_name || updatedPatientResponse.patientName || formData.name || '',
+          phone: updatedPatientResponse.mobileno || updatedPatientResponse.phone || formData.phone || '',
+          email: updatedPatientResponse.email || formData.email || '',
+          age: updatedPatientResponse.age ? parseInt(updatedPatientResponse.age) : (formData.age || 0),
+          gender: updatedPatientResponse.gender || formData.gender || '',
+          bloodType: updatedPatientResponse.blood_group || updatedPatientResponse.bloodGroup || formData.bloodType || '',
+          address: updatedPatientResponse.address || formData.address || '',
+          condition: updatedPatientResponse.condition || formData.condition || 'Stable',
+          admissionDate: updatedPatientResponse.admission_date || updatedPatientResponse.admissionDate || formData.admissionDate || '',
+          patientType: updatedPatientResponse.patient_type || updatedPatientResponse.patientType || formData.patientType || '',
+          guardianName: updatedPatientResponse.guardian_name || updatedPatientResponse.guardianName || formData.guardianName || '',
+          guardianPhone: updatedPatientResponse.guardian_phone || updatedPatientResponse.guardianPhone || formData.guardianPhone || '',
+          guardianAddress: updatedPatientResponse.guardian_address || updatedPatientResponse.guardianAddress || formData.guardianAddress || '',
+          guardianEmail: updatedPatientResponse.guardian_email || updatedPatientResponse.guardianEmail || formData.guardianEmail || '',
+          maritalStatus: updatedPatientResponse.marital_status || updatedPatientResponse.maritalStatus || formData.maritalStatus || '',
+          knownAllergies: updatedPatientResponse.known_allergies || updatedPatientResponse.knownAllergies || formData.knownAllergies || '',
+          organisation: updatedPatientResponse.organisation || formData.organisation || '',
+          note: updatedPatientResponse.note || formData.note || ''
+        };
+        
+        setPatients(patients.map(p => p.id === selectedPatient.id ? updatedPatient : p));
+        setSelectedPatient(null);
+        setFormData({});
+        setIsAddModalOpen(false);
+        
+        return updatedPatient;
       });
-      
-      setPatients(patients.map(p => p.id === selectedPatient.id ? updatedPatient : p));
-      setSelectedPatient(null);
-      setFormData({});
-      setIsAddModalOpen(false);
-      toast.success('Patient updated successfully!');
     } catch (error) {
       console.error('Error updating patient:', error);
-      toast.error('Failed to update patient. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -135,6 +279,73 @@ export function PatientsPage({ session }: PatientsPageProps) {
     }
   };
 
+  const handleSelectPatient = (id: string) => {
+    const newSelected = new Set(selectedPatientIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedPatientIds(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedPatientIds.size === filteredPatients.length) {
+      setSelectedPatientIds(new Set());
+    } else {
+      setSelectedPatientIds(new Set(filteredPatients.map(p => p.id)));
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (selectedPatientIds.size === 0) {
+      toast.error('Please select at least one patient to delete');
+      return;
+    }
+
+    const count = selectedPatientIds.size;
+    if (!confirm(`Are you sure you want to delete ${count} patient${count > 1 ? 's' : ''}? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsDeleteAllLoading(true);
+    const failedIds: string[] = [];
+    
+    try {
+      const deletePromises = Array.from(selectedPatientIds).map(async (id) => {
+        try {
+          await patientsApi.delete(id);
+        } catch (error) {
+          console.error(`Error deleting patient ${id}:`, error);
+          failedIds.push(id);
+        }
+      });
+
+      await Promise.all(deletePromises);
+      
+      if (failedIds.length === 0) {
+        // All deletions successful
+        setPatients(patients.filter(p => !selectedPatientIds.has(p.id)));
+        setSelectedPatientIds(new Set());
+        toast.success(`${count} patient${count > 1 ? 's' : ''} deleted successfully!`);
+      } else if (failedIds.length === count) {
+        // All deletions failed
+        toast.error('Failed to delete all patients. Please try again.');
+      } else {
+        // Partial success
+        const successCount = count - failedIds.length;
+        setPatients(patients.filter(p => !selectedPatientIds.has(p.id) || failedIds.includes(p.id)));
+        setSelectedPatientIds(new Set(failedIds));
+        toast.warning(`${successCount} patient${successCount > 1 ? 's' : ''} deleted. ${failedIds.length} failed.`);
+      }
+    } catch (error) {
+      console.error('Error deleting patients:', error);
+      toast.error('Failed to delete some patients. Please try again.');
+    } finally {
+      setIsDeleteAllLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <motion.div
@@ -144,20 +355,34 @@ export function PatientsPage({ session }: PatientsPageProps) {
         <Card className="glass-card">
           <CardHeader>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <CardTitle className="text-lg sm:text-xl">Patient Management</CardTitle>
-              <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-                <DialogTrigger asChild>
-                  <Button 
-                    onClick={() => {
-                      setSelectedPatient(null);
-                      setFormData({});
-                    }}
-                    className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
+              <div className="flex items-center gap-3">
+                <CardTitle className="text-lg sm:text-xl">Patient Management</CardTitle>
+                <VoiceAgent department="patients" userRole={session?.role || 'doctor'} />
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                {selectedPatientIds.size > 0 && (
+                  <Button
+                    onClick={handleDeleteAll}
+                    disabled={isDeleteAllLoading}
+                    className="bg-destructive hover:bg-destructive/90 w-full sm:w-auto"
                   >
-                    <Plus className="size-4 mr-2" />
-                    Add Patient
+                    <Trash className="size-4 mr-2" />
+                    Delete {selectedPatientIds.size} Patient{selectedPatientIds.size > 1 ? 's' : ''}
                   </Button>
-                </DialogTrigger>
+                )}
+                <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      onClick={() => {
+                        setSelectedPatient(null);
+                        setFormData({});
+                      }}
+                      className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
+                    >
+                      <Plus className="size-4 mr-2" />
+                      Add Patient
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
                   <DialogHeader>
                     <DialogTitle className="text-lg">{selectedPatient ? 'Edit Patient' : 'Add New Patient'}</DialogTitle>
@@ -241,13 +466,14 @@ export function PatientsPage({ session }: PatientsPageProps) {
                       />
                     </div>
                     <div className="space-y-2 sm:col-span-2">
-                      <Label htmlFor="address" className="text-sm">Address</Label>
+                      <Label htmlFor="address" className="text-sm">Address *</Label>
                       <Input
                         id="address"
                         value={formData.address || ''}
                         onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                         placeholder="Enter address"
                         className="h-10"
+                        required
                       />
                     </div>
                     <div className="space-y-2">
@@ -296,7 +522,7 @@ export function PatientsPage({ session }: PatientsPageProps) {
                     </Button>
                     <Button 
                       onClick={selectedPatient ? handleUpdate : handleAdd}
-                      disabled={loading || !formData.name || !formData.phone}
+                      disabled={loading || !formData.name || !formData.phone || !formData.address}
                       className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
                     >
                       {loading ? 'Saving...' : selectedPatient ? 'Update' : 'Add'} Patient
@@ -304,6 +530,7 @@ export function PatientsPage({ session }: PatientsPageProps) {
                   </div>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -320,15 +547,39 @@ export function PatientsPage({ session }: PatientsPageProps) {
             </div>
 
             <div className="space-y-3">
+              {filteredPatients.length > 0 && (
+                <div className="glass-bg rounded-lg p-4 mb-4 flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedPatientIds.size === filteredPatients.length && filteredPatients.length > 0}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 cursor-pointer"
+                    title="Select all patients"
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {selectedPatientIds.size > 0 
+                      ? `${selectedPatientIds.size} selected` 
+                      : 'Select all'}
+                  </span>
+                </div>
+              )}
               {filteredPatients.map((patient, index) => (
                 <motion.div
                   key={patient.id}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className="glass-bg rounded-lg p-4 hover:shadow-md transition-all"
+                  className={`glass-bg rounded-lg p-4 hover:shadow-md transition-all ${
+                    selectedPatientIds.has(patient.id) ? 'ring-2 ring-primary' : ''
+                  }`}
                 >
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedPatientIds.has(patient.id)}
+                      onChange={() => handleSelectPatient(patient.id)}
+                      className="w-4 h-4 cursor-pointer mt-1 sm:mt-0"
+                    />
                     <div className="flex-1 w-full">
                       {/* Mobile Layout */}
                       <div className="block sm:hidden space-y-2">

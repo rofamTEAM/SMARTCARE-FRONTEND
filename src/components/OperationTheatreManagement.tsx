@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { otApi } from '../utils/api';
+import { VoiceAgent } from './VoiceAgent';
+
+interface Surgery {
   id: string;
   patientName: string;
   surgeonName: string;
@@ -41,7 +44,7 @@ export function OperationTheatreManagement({ session }: OperationTheatreManageme
     surgery.operationType?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!formData.patientName || !formData.surgeonName || !formData.operationType) {
       toast.error('Please fill in required fields');
       return;
@@ -92,7 +95,9 @@ export function OperationTheatreManagement({ session }: OperationTheatreManageme
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Operation Theatre Management</CardTitle>
-              <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+              <div className="flex items-center gap-2">
+                <VoiceAgent department="operation-theatre" userRole={session?.role || 'doctor'} />
+                <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
                 <DialogTrigger asChild>
                   <Button onClick={() => setFormData({})}>
                     <Plus className="size-4 mr-2" />
@@ -205,6 +210,7 @@ export function OperationTheatreManagement({ session }: OperationTheatreManageme
                   </div>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
           </CardHeader>
           <CardContent>

@@ -10,6 +10,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { AIInsightPanel } from './AIInsightPanel';
+import { VoiceAgent } from './VoiceAgent';
 
 interface InventoryItem {
   id: string;
@@ -237,6 +238,7 @@ export function InventoryManagement({ session }: InventoryManagementProps) {
     in_stock: items.filter(i => i.status === 'in_stock').length,
     low_stock: items.filter(i => i.status === 'low_stock').length,
     out_of_stock: items.filter(i => i.status === 'out_of_stock').length,
+    expired: items.filter(i => i.status === 'expired').length,
     total_value: items.reduce((sum, item) => sum + (item.current_stock * item.unit_price), 0)
   };
 
@@ -247,10 +249,13 @@ export function InventoryManagement({ session }: InventoryManagementProps) {
           <h1 className="text-2xl font-bold text-gray-900">Inventory Management</h1>
           <p className="text-muted-foreground">Track medical supplies, equipment, and medications</p>
         </div>
-        <Button onClick={() => setShowAddItem(true)}>
-          <Plus className="size-4 mr-2" />
-          Add Item
-        </Button>
+        <div className="flex items-center gap-2">
+          <VoiceAgent department="inventory" userRole={session?.role || 'admin'} />
+          <Button onClick={() => setShowAddItem(true)}>
+            <Plus className="size-4 mr-2" />
+            Add Item
+          </Button>
+        </div>
       </div>
 
       {/* Statistics */}

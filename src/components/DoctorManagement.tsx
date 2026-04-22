@@ -7,8 +7,17 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-import { employeeService, Employee } from '../utils/supabase/client';
 import { staffApi } from '../utils/api';
+
+interface Employee {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  position: string;
+  department?: string;
+  status: 'active' | 'inactive';
+}
 
 interface Doctor extends Employee {
   specialization?: string;
@@ -53,45 +62,43 @@ export function DoctorManagement() {
 
     setLoading(true);
     try {
-      const doctorWithDetails = {
-        id: Date.now().toString(),
+      // Prepare data with snake_case field names for backend
+      const staffData = {
         name: formData.name,
         email: formData.email,
-        phone: formData.phone,
-        position: 'Doctor',
+        contact_no: formData.phone,
         department: formData.department || '',
-        salary: formData.salary,
-        hire_date: new Date().toISOString().split('T')[0],
-        status: 'active' as const,
+        designation: 'Doctor',
+        date_of_joining: new Date().toISOString().split('T')[0],
+        employee_id: `EMP-${Date.now()}`,
         specialization: formData.specialization,
-        experience: formData.experience,
+        experience: formData.experience || 0,
         availability: formData.availability || 'Available',
         license_number: formData.license_number,
-        consultation_fee: formData.consultation_fee,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        consultation_fee: formData.consultation_fee || 0,
+        salary: formData.salary || 0,
+        is_active: 1
       };
 
-      try {
-        const newDoctor = await staffApi.create({
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          position: 'Doctor',
-          department: formData.department || '',
-          salary: formData.salary,
-          hire_date: new Date().toISOString().split('T')[0],
-          status: 'active',
-          specialization: formData.specialization,
-          experience: formData.experience,
-          availability: formData.availability || 'Available',
-          license_number: formData.license_number,
-          consultation_fee: formData.consultation_fee,
-        });
-        doctorWithDetails.id = newDoctor.id;
-      } catch (dbError) {
-        console.error('Error saving doctor:', dbError);
-      }
+      // Save to backend
+      const newDoctor = await staffApi.create(staffData);
+      
+      // Add to local state with the returned data
+      const doctorWithDetails = {
+        id: newDoctor.id || Date.now().toString(),
+        name: newDoctor.name,
+        email: newDoctor.email,
+        phone: newDoctor.contact_no,
+        position: 'Doctor',
+        department: newDoctor.department,
+        salary: newDoctor.salary,
+        status: 'active' as const,
+        specialization: newDoctor.specialization,
+        experience: newDoctor.experience,
+        availability: newDoctor.availability || 'Available',
+        license_number: newDoctor.license_number,
+        consultation_fee: newDoctor.consultation_fee
+      };
       
       setDoctors([...doctors, doctorWithDetails]);
       setFormData({});
@@ -114,6 +121,25 @@ export function DoctorManagement() {
 
     setLoading(true);
     try {
+      // Prepare data with snake_case field names for backend
+      const staffData = {
+        name: formData.name,
+        email: formData.email,
+        contact_no: formData.phone,
+        department: formData.department,
+        designation: 'Doctor',
+        specialization: formData.specialization,
+        experience: formData.experience || 0,
+        availability: formData.availability,
+        license_number: formData.license_number,
+        consultation_fee: formData.consultation_fee || 0,
+        salary: formData.salary || 0
+      };
+
+      // Update in backend
+      await staffApi.update(selectedDoctor.id, staffData);
+      
+      // Update local state
       const doctorWithDetails = {
         ...selectedDoctor,
         name: formData.name,
@@ -125,26 +151,8 @@ export function DoctorManagement() {
         experience: formData.experience,
         availability: formData.availability,
         license_number: formData.license_number,
-        consultation_fee: formData.consultation_fee,
-        updated_at: new Date().toISOString()
+        consultation_fee: formData.consultation_fee
       };
-
-      try {
-        await staffApi.update(selectedDoctor.id, {
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          department: formData.department,
-          salary: formData.salary,
-          specialization: formData.specialization,
-          experience: formData.experience,
-          availability: formData.availability,
-          license_number: formData.license_number,
-          consultation_fee: formData.consultation_fee,
-        });
-      } catch (dbError) {
-        console.error('Error updating doctor:', dbError);
-      }
       
       setDoctors(doctors.map(d => d.id === selectedDoctor.id ? doctorWithDetails : d));
       setSelectedDoctor(null);

@@ -157,7 +157,7 @@ export function TodoList({ session }: TodoListProps) {
       ...newTodo,
       status: 'Pending',
       createdDate: new Date().toISOString().split('T')[0],
-      createdBy: session?.user?.user_metadata?.name || 'User',
+      createdBy: session?.name || 'User',
       completed: false
     };
 

@@ -7,7 +7,7 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
-import { DatabaseService } from '../utils/supabase/database';
+import { bedsApi } from '../utils/api';
 
 interface Bed {
   id: string;

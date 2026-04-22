@@ -14,8 +14,10 @@ import { toast } from 'sonner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { billingApi } from '../utils/api';
 import { AutoFillButton } from './AutoFillButton';
-
 import { AIInsightPanel } from './AIInsightPanel';
+import { VoiceAgent } from './VoiceAgent';
+
+interface BillingRecord {
   id: string;
   patientId: string;
   patientName: string;
@@ -30,15 +32,15 @@ import { AIInsightPanel } from './AIInsightPanel';
   notes?: string;
 }
 
-interface Bill {
+interface BillingManagementProps {
   session: any;
 }
 
 export function BillingManagement({ session }: BillingManagementProps) {
-  const [bills, setBills] = useState<Bill[]>([]);
+  const [bills, setBills] = useState<BillingRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [formData, setFormData] = useState<Partial<Bill>>({});
+  const [formData, setFormData] = useState<Partial<BillingRecord>>({});
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -147,20 +149,28 @@ export function BillingManagement({ session }: BillingManagementProps) {
   const handlePayment = async (id: string, amount: number) => {
     const bill = bills.find(b => b.id === id);
     if (!bill) return;
-    const newPaidAmount = bill.paidAmount + amount;
-    const updated = await billingApi.update(id, {
-      paidAmount: newPaidAmount,
-      status: newPaidAmount >= bill.amount ? 'Paid' : 'Partial'
-    });
-    setBills(bills.map(b => b.id === id ? updated : b));
-    toast.success('Payment recorded successfully!');
+    try {
+      const newPaidAmount = bill.paidAmount + amount;
+      const updated = await billingApi.update(id, {
+        paidAmount: newPaidAmount,
+        status: newPaidAmount >= bill.amount ? 'Paid' : 'Partial'
+      });
+      setBills(bills.map(b => b.id === id ? updated : b));
+      toast.success('Payment recorded successfully!');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to record payment.');
+    }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this bill?')) return;
-    await billingApi.delete(id);
-    setBills(bills.filter(b => b.id !== id));
-    toast.success('Bill deleted successfully!');
+    try {
+      await billingApi.delete(id);
+      setBills(bills.filter(b => b.id !== id));
+      toast.success('Bill deleted successfully!');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete bill.');
+    }
   };
 
   return (
@@ -173,7 +183,10 @@ export function BillingManagement({ session }: BillingManagementProps) {
           <DollarSign className="size-8 text-primary" />
           Billing Management
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage patient bills and payments</p>
+        <div className="flex items-center gap-3 mt-1">
+          <p className="text-sm text-muted-foreground">Manage patient bills and payments</p>
+          <VoiceAgent department="billing" userRole={session?.role || 'receptionist'} />
+        </div>
       </motion.div>
 
       {/* Stats Cards */}

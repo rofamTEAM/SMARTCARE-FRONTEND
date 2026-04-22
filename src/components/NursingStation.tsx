@@ -33,6 +33,7 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { TodoListWidget } from './TodoListWidget';
+import { VoiceAgent } from './VoiceAgent';
 
 interface Patient {
   id: string;
@@ -277,6 +278,7 @@ export function NursingStation() {
           <h1 className="text-2xl text-gray-900">Nursing Station</h1>
           <p className="text-muted-foreground">Monitor patients, record vitals, and manage care tasks</p>
         </div>
+        <VoiceAgent department="nursing" userRole="nurse" />
       </div>
 
       {/* Stats Cards */}

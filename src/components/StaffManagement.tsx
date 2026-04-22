@@ -41,42 +41,52 @@ export function StaffManagement({ session }: StaffManagementProps) {
     member.role?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!formData.name || !formData.email || !formData.role) {
       toast.error('Please fill in required fields');
       return;
     }
-
-    const newStaff = await staffApi.create({
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      role: formData.role,
-      department: formData.department,
-      salary: formData.salary,
-      joinDate: formData.joinDate || new Date().toISOString().split('T')[0],
-      status: 'Active'
-    });
-    setStaff([...staff, newStaff]);
-    
-    setFormData({});
-    setIsAddModalOpen(false);
-    toast.success('Staff member added successfully!');
+    try {
+      const newStaff = await staffApi.create({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        role: formData.role,
+        department: formData.department,
+        salary: formData.salary,
+        joinDate: formData.joinDate || new Date().toISOString().split('T')[0],
+        status: 'Active'
+      });
+      setStaff([...staff, newStaff]);
+      setFormData({});
+      setIsAddModalOpen(false);
+      toast.success('Staff member added successfully!');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to add staff member. Please try again.');
+    }
   };
 
   const toggleStatus = async (id: string) => {
     const member = staff.find(m => m.id === id);
     if (!member) return;
-    const updated = await staffApi.update(id, { status: member.status === 'Active' ? 'Inactive' : 'Active' });
-    setStaff(staff.map(m => m.id === id ? updated : m));
-    toast.success('Status updated successfully!');
+    try {
+      const updated = await staffApi.update(id, { status: member.status === 'Active' ? 'Inactive' : 'Active' });
+      setStaff(staff.map(m => m.id === id ? updated : m));
+      toast.success('Status updated successfully!');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update status.');
+    }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this staff member?')) return;
-    await staffApi.delete(id);
-    setStaff(staff.filter(m => m.id !== id));
-    toast.success('Staff member deleted successfully!');
+    try {
+      await staffApi.delete(id);
+      setStaff(staff.filter(m => m.id !== id));
+      toast.success('Staff member deleted successfully!');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete staff member.');
+    }
   };
 
   const roles = ['Doctor', 'Nurse', 'Pharmacist', 'Lab Technician', 'Receptionist', 'Admin', 'Accountant'];

@@ -6,10 +6,22 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-import { employeeService, Employee } from '../utils/supabase/client';
+import { staffApi } from '../utils/api';
 
 interface EmployeePageNewProps {
   session: any;
+}
+
+interface Employee {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  position: string;
+  department?: string;
+  salary?: number;
+  hire_date?: string;
+  status: 'active' | 'inactive';
 }
 
 export function EmployeePageNew({ session }: EmployeePageNewProps) {
@@ -20,7 +32,7 @@ export function EmployeePageNew({ session }: EmployeePageNewProps) {
   const [formData, setFormData] = useState<Partial<Employee>>({});
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
-  const userRole = session?.user?.user_metadata?.role || 'user';
+  const userRole = session?.role || 'user';
   const isAdmin = userRole === 'admin' || userRole === 'super_admin';
 
   useEffect(() => {
@@ -29,7 +41,7 @@ export function EmployeePageNew({ session }: EmployeePageNewProps) {
 
   const fetchEmployees = async () => {
     try {
-      const data = await employeeService.getAll();
+      const data = await staffApi.getAll();
       setEmployees(data);
     } catch (error) {
       // Silent fallback
@@ -40,17 +52,18 @@ export function EmployeePageNew({ session }: EmployeePageNewProps) {
   };
 
   const handleAdd = async () => {
-    if (!formData.name || !formData.position) {
-      toast.error('Please fill in all required fields');
+    if (!formData.name || !formData.position || !formData.email || !formData.phone || !formData.department) {
+      toast.error('Please fill in all required fields: name, position, email, phone, department');
       return;
     }
 
     try {
-      const newEmployee = await employeeService.create({
+      const newEmployee = await staffApi.create({
         name: formData.name,
         email: formData.email,
-        phone: formData.phone,
+        contact_no: formData.phone, // Map phone to contact_no
         position: formData.position,
+        designation: formData.position, // Map position to designation
         department: formData.department,
         salary: formData.salary,
         hire_date: formData.hire_date,
@@ -61,9 +74,10 @@ export function EmployeePageNew({ session }: EmployeePageNewProps) {
       setShowForm(false);
       setFormData({});
       toast.success('Employee added successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding employee:', error);
-      toast.error('Failed to add employee. Please try again.');
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to add employee. Please try again.';
+      toast.error(errorMessage);
     }
   };
 
@@ -71,11 +85,12 @@ export function EmployeePageNew({ session }: EmployeePageNewProps) {
     if (!selectedEmployee) return;
 
     try {
-      const updatedEmployee = await employeeService.update(selectedEmployee.id, {
+      const updatedEmployee = await staffApi.update(selectedEmployee.id, {
         name: formData.name,
         email: formData.email,
-        phone: formData.phone,
+        contact_no: formData.phone, // Map phone to contact_no
         position: formData.position,
+        designation: formData.position, // Map position to designation
         department: formData.department,
         salary: formData.salary,
         hire_date: formData.hire_date,
@@ -87,9 +102,10 @@ export function EmployeePageNew({ session }: EmployeePageNewProps) {
       setFormData({});
       setSelectedEmployee(null);
       toast.success('Employee updated successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating employee:', error);
-      toast.error('Failed to update employee. Please try again.');
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to update employee. Please try again.';
+      toast.error(errorMessage);
     }
   };
 
@@ -97,7 +113,7 @@ export function EmployeePageNew({ session }: EmployeePageNewProps) {
     if (!confirm('Are you sure you want to delete this employee?')) return;
 
     try {
-      await employeeService.delete(id);
+      await staffApi.delete(id);
       setEmployees(employees.filter(employee => employee.id !== id));
       toast.success('Employee deleted successfully!');
     } catch (error) {

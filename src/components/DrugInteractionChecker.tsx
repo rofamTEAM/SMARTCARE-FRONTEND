@@ -41,6 +41,8 @@ List any significant interactions, severity (mild/moderate/severe), and clinical
 
   return (
     <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+
+
       <CardHeader className="pb-2 pt-3 px-4">
         <CardTitle className="text-sm flex items-center gap-2">
           <AlertTriangle className="size-4 text-amber-500" />

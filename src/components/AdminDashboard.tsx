@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { useWebSocket } from '../hooks/useWebSocket';
 import { 
   Users, Calendar, Stethoscope, Pill, TestTube, 
   Droplet, FileText, Settings, BarChart3, 
@@ -70,8 +71,38 @@ export function AdminDashboard({ session }: AdminDashboardProps) {
     bedOccupancy: 0
   });
 
+  // WebSocket listeners for real-time updates
+  const handlePatientCreated = useCallback((data: any) => {
+    console.log('📊 Patient created event received, refreshing stats...');
+    fetchDashboardStats();
+    fetchRecentActivities();
+  }, []);
+
+  const handlePatientUpdated = useCallback((data: any) => {
+    console.log('📊 Patient updated event received, refreshing stats...');
+    fetchDashboardStats();
+    fetchRecentActivities();
+  }, []);
+
+  const handlePatientDeleted = useCallback((data: any) => {
+    console.log('📊 Patient deleted event received, refreshing stats...');
+    fetchDashboardStats();
+    fetchRecentActivities();
+  }, []);
+
+  // Initialize WebSocket connection
+  const { isConnected } = useWebSocket({
+    userId: session?.id,
+    role: session?.role,
+    onPatientCreated: handlePatientCreated,
+    onPatientUpdated: handlePatientUpdated,
+    onPatientDeleted: handlePatientDeleted,
+    enabled: true
+  });
+
   useEffect(() => {
     fetchDashboardStats();
+    fetchRecentActivities();
   }, []);
 
   const fetchDashboardStats = async () => {
@@ -111,13 +142,58 @@ export function AdminDashboard({ session }: AdminDashboardProps) {
     { name: 'General', patients: 65, color: 'hsl(var(--destructive))' },
   ];
 
-  const recentActivities = [
-    { action: 'New patient registered', time: '5 min ago', type: 'patient', icon: Users },
-    { action: 'Appointment scheduled', time: '12 min ago', type: 'appointment', icon: Calendar },
-    { action: 'Lab report completed', time: '25 min ago', type: 'lab', icon: TestTube },
-    { action: 'Payment received', time: '1 hour ago', type: 'payment', icon: DollarSign },
-    { action: 'Emergency admission', time: '2 hours ago', type: 'emergency', icon: AlertTriangle },
-  ];
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchRecentActivities();
+  }, []);
+
+  const fetchRecentActivities = async () => {
+    try {
+      const { apiClient } = await import('../services/apiClient');
+      const result = await apiClient.get('/dashboard/recent-activities');
+      const activities: any[] = [];
+      
+      // Add recent patients
+      if (result.data?.recentPatients) {
+        result.data.recentPatients.forEach((patient: any) => {
+          activities.push({
+            action: `New patient registered: ${patient.patientName}`,
+            time: formatTimeAgo(patient.createdAt),
+            type: 'patient',
+            icon: Users
+          });
+        });
+      }
+      
+      // Add recent appointments
+      if (result.data?.recentAppointments) {
+        result.data.recentAppointments.forEach((apt: any) => {
+          activities.push({
+            action: `Appointment scheduled: ${apt.patientName} with ${apt.doctor}`,
+            time: formatTimeAgo(apt.date),
+            type: 'appointment',
+            icon: Calendar
+          });
+        });
+      }
+      
+      setRecentActivities(activities.slice(0, 5));
+    } catch (error) {
+      console.error('Failed to fetch recent activities:', error);
+    }
+  };
+
+  const formatTimeAgo = (date: string | Date) => {
+    const now = new Date();
+    const then = new Date(date);
+    const seconds = Math.floor((now.getTime() - then.getTime()) / 1000);
+    
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} hour ago`;
+    return `${Math.floor(seconds / 86400)} day ago`;
+  };
 
   const statCards = [
     {
@@ -161,11 +237,21 @@ export function AdminDashboard({ session }: AdminDashboardProps) {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-          <BarChart3 className="size-8 text-primary" />
-          Admin Dashboard
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Hospital management overview and analytics</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+              <BarChart3 className="size-8 text-primary" />
+              Admin Dashboard
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">Hospital management overview and analytics</p>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-full">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className="text-xs text-muted-foreground">
+              {isConnected ? 'Live Sync' : 'Offline'}
+            </span>
+          </div>
+        </div>
       </motion.div>
 
       {/* Stats Cards */}

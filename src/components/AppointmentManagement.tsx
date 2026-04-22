@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Search, Edit, Trash2, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from './ui/button';
@@ -6,78 +6,69 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
-import { useLocalStorage } from '../hooks/useLocalStorage';
-
-interface Appointment {
-  id: string;
-  patientName: string;
-  doctorName: string;
-  date: string;
-  time: string;
-  department: string;
-  reason: string;
-  status: 'Scheduled' | 'Completed' | 'Cancelled';
-}
+import { appointmentsService, Appointment } from '../services/appointments.service';
+import { toast } from 'sonner';
+import { errorHandler } from '../utils/errorHandler';
 
 export function AppointmentManagement() {
-  const [appointments, setAppointments] = useLocalStorage<Appointment[]>('appointments', [
-    {
-      id: '1',
-      patientName: 'John Doe',
-      doctorName: 'Dr. Sarah Johnson',
-      date: '2024-12-01',
-      time: '10:00',
-      department: 'Cardiology',
-      reason: 'Regular checkup',
-      status: 'Scheduled'
-    },
-    {
-      id: '2',
-      patientName: 'Jane Smith',
-      doctorName: 'Dr. Michael Chen',
-      date: '2024-12-01',
-      time: '14:30',
-      department: 'Neurology',
-      reason: 'Follow-up consultation',
-      status: 'Scheduled'
-    },
-    {
-      id: '3',
-      patientName: 'Robert Wilson',
-      doctorName: 'Dr. Emily Brown',
-      date: '2024-11-30',
-      time: '11:00',
-      department: 'Pediatrics',
-      reason: 'Vaccination',
-      status: 'Completed'
-    }
-  ]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [formData, setFormData] = useState<Partial<Appointment>>({});
 
+  useEffect(() => {
+    fetchAppointments();
+  }, []);
+
+  const fetchAppointments = async () => {
+    try {
+      setLoading(true);
+      const data = await appointmentsService.getAll();
+      setAppointments(data || []);
+    } catch (error) {
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
+      setAppointments([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredAppointments = appointments.filter(appointment =>
-    appointment.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    appointment.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    appointment.department.toLowerCase().includes(searchTerm.toLowerCase())
+    appointment.patientId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    appointment.doctorId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    appointment.reason?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAdd = () => {
-    const newAppointment: Appointment = {
-      id: Date.now().toString(),
-      patientName: formData.patientName || '',
-      doctorName: formData.doctorName || '',
-      date: formData.date || '',
-      time: formData.time || '',
-      department: formData.department || '',
-      reason: formData.reason || '',
-      status: (formData.status as Appointment['status']) || 'Scheduled'
-    };
-    setAppointments([...appointments, newAppointment]);
-    setFormData({});
-    setIsAddModalOpen(false);
+  const handleAdd = async () => {
+    if (!formData.patientId || !formData.doctorId || !formData.appointmentDate || !formData.appointmentTime) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const newAppointment = await appointmentsService.create({
+        patientId: formData.patientId,
+        doctorId: formData.doctorId,
+        appointmentDate: formData.appointmentDate,
+        appointmentTime: formData.appointmentTime,
+        reason: formData.reason || '',
+        notes: formData.notes,
+      });
+      setAppointments([...appointments, newAppointment]);
+      setFormData({});
+      setIsAddModalOpen(false);
+      toast.success('Appointment scheduled successfully!');
+    } catch (error) {
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEdit = (appointment: Appointment) => {
@@ -86,19 +77,46 @@ export function AppointmentManagement() {
     setIsAddModalOpen(true);
   };
 
-  const handleUpdate = () => {
-    if (selectedAppointment) {
-      setAppointments(appointments.map(a => 
-        a.id === selectedAppointment.id ? { ...selectedAppointment, ...formData } : a
-      ));
+  const handleUpdate = async () => {
+    if (!selectedAppointment) return;
+
+    try {
+      setLoading(true);
+      const updated = await appointmentsService.update(selectedAppointment.id, {
+        patientId: formData.patientId || selectedAppointment.patientId,
+        doctorId: formData.doctorId || selectedAppointment.doctorId,
+        appointmentDate: formData.appointmentDate || selectedAppointment.appointmentDate,
+        appointmentTime: formData.appointmentTime || selectedAppointment.appointmentTime,
+        reason: formData.reason || selectedAppointment.reason,
+        notes: formData.notes,
+      });
+      setAppointments(appointments.map(a => a.id === selectedAppointment.id ? updated : a));
       setSelectedAppointment(null);
       setFormData({});
       setIsAddModalOpen(false);
+      toast.success('Appointment updated successfully!');
+    } catch (error) {
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDelete = (id: string) => {
-    setAppointments(appointments.filter(a => a.id !== id));
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this appointment?')) return;
+
+    try {
+      setLoading(true);
+      await appointmentsService.delete(id);
+      setAppointments(appointments.filter(a => a.id !== id));
+      toast.success('Appointment deleted successfully!');
+    } catch (error) {
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -130,62 +148,40 @@ export function AppointmentManagement() {
                   </DialogHeader>
                   <div className="grid grid-cols-2 gap-4 py-4">
                     <div className="space-y-2">
-                      <Label htmlFor="patientName">Patient Name</Label>
+                      <Label htmlFor="patientId">Patient ID</Label>
                       <Input
-                        id="patientName"
-                        value={formData.patientName || ''}
-                        onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
-                        placeholder="Enter patient name"
+                        id="patientId"
+                        value={formData.patientId || ''}
+                        onChange={(e) => setFormData({ ...formData, patientId: e.target.value })}
+                        placeholder="Enter patient ID"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="doctorName">Doctor Name</Label>
+                      <Label htmlFor="doctorId">Doctor ID</Label>
                       <Input
-                        id="doctorName"
-                        value={formData.doctorName || ''}
-                        onChange={(e) => setFormData({ ...formData, doctorName: e.target.value })}
-                        placeholder="Enter doctor name"
+                        id="doctorId"
+                        value={formData.doctorId || ''}
+                        onChange={(e) => setFormData({ ...formData, doctorId: e.target.value })}
+                        placeholder="Enter doctor ID"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="department">Department</Label>
+                      <Label htmlFor="appointmentDate">Date</Label>
                       <Input
-                        id="department"
-                        value={formData.department || ''}
-                        onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                        placeholder="e.g., Cardiology"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="date">Date</Label>
-                      <Input
-                        id="date"
+                        id="appointmentDate"
                         type="date"
-                        value={formData.date || ''}
-                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                        value={formData.appointmentDate || ''}
+                        onChange={(e) => setFormData({ ...formData, appointmentDate: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="time">Time</Label>
+                      <Label htmlFor="appointmentTime">Time</Label>
                       <Input
-                        id="time"
+                        id="appointmentTime"
                         type="time"
-                        value={formData.time || ''}
-                        onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                        value={formData.appointmentTime || ''}
+                        onChange={(e) => setFormData({ ...formData, appointmentTime: e.target.value })}
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="status">Status</Label>
-                      <select
-                        id="status"
-                        value={formData.status || 'Scheduled'}
-                        onChange={(e) => setFormData({ ...formData, status: e.target.value as Appointment['status'] })}
-                        className="w-full px-3 py-2 border border-border rounded-md"
-                      >
-                        <option value="Scheduled">Scheduled</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Cancelled">Cancelled</option>
-                      </select>
                     </div>
                     <div className="space-y-2 col-span-2">
                       <Label htmlFor="reason">Reason for Visit</Label>
@@ -196,13 +192,25 @@ export function AppointmentManagement() {
                         placeholder="Enter reason for appointment"
                       />
                     </div>
+                    <div className="space-y-2 col-span-2">
+                      <Label htmlFor="notes">Notes</Label>
+                      <Input
+                        id="notes"
+                        value={formData.notes || ''}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        placeholder="Additional notes"
+                      />
+                    </div>
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>
                       Cancel
                     </Button>
-                    <Button onClick={selectedAppointment ? handleUpdate : handleAdd}>
-                      {selectedAppointment ? 'Update' : 'Schedule'} Appointment
+                    <Button 
+                      onClick={selectedAppointment ? handleUpdate : handleAdd}
+                      disabled={loading}
+                    >
+                      {loading ? 'Processing...' : selectedAppointment ? 'Update' : 'Schedule'} Appointment
                     </Button>
                   </div>
                 </DialogContent>
@@ -238,30 +246,30 @@ export function AppointmentManagement() {
                       </div>
                       <div className="grid grid-cols-5 gap-4 flex-1">
                         <div>
-                          <p className="text-xs text-muted-foreground">Patient</p>
-                          <p className="text-sm text-gray-900">{appointment.patientName}</p>
+                          <p className="text-xs text-muted-foreground">Patient ID</p>
+                          <p className="text-sm text-gray-900">{appointment.patientId}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">Doctor</p>
-                          <p className="text-sm text-gray-900">{appointment.doctorName}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Department</p>
-                          <p className="text-sm text-gray-900">{appointment.department}</p>
+                          <p className="text-xs text-muted-foreground">Doctor ID</p>
+                          <p className="text-sm text-gray-900">{appointment.doctorId}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Date & Time</p>
-                          <p className="text-sm text-gray-900">{appointment.date} {appointment.time}</p>
+                          <p className="text-sm text-gray-900">{appointment.appointmentDate} {appointment.appointmentTime}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Status</p>
                           <span className={`inline-block px-2 py-1 rounded text-xs ${
-                            appointment.status === 'Scheduled' ? 'bg-blue-100 text-primary' :
-                            appointment.status === 'Completed' ? 'bg-green-100 text-primary' :
+                            appointment.status === 'scheduled' ? 'bg-blue-100 text-primary' :
+                            appointment.status === 'completed' ? 'bg-green-100 text-primary' :
                             'bg-red-100 text-destructive'
                           }`}>
                             {appointment.status}
                           </span>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Reason</p>
+                          <p className="text-sm text-gray-900">{appointment.reason}</p>
                         </div>
                       </div>
                     </div>
@@ -282,16 +290,18 @@ export function AppointmentManagement() {
                       </Button>
                     </div>
                   </div>
-                  <div className="mt-3 ml-16">
-                    <p className="text-xs text-muted-foreground">Reason:</p>
-                    <p className="text-sm text-gray-900">{appointment.reason}</p>
-                  </div>
+                  {appointment.notes && (
+                    <div className="mt-3 ml-16">
+                      <p className="text-xs text-muted-foreground">Notes:</p>
+                      <p className="text-sm text-gray-900">{appointment.notes}</p>
+                    </div>
+                  )}
                 </motion.div>
               ))}
 
               {filteredAppointments.length === 0 && (
                 <div className="text-center py-12 text-muted-foreground">
-                  No appointments found
+                  {loading ? 'Loading appointments...' : 'No appointments found'}
                 </div>
               )}
             </div>

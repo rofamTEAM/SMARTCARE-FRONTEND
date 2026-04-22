@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '../ui/label';
 import { toast } from 'sonner';
 import { patientsApi } from '../../utils/api';
-import { patientsApi } from '../../utils/api';
+
+interface Patient {
   id: string;
   name: string;
   email: string;

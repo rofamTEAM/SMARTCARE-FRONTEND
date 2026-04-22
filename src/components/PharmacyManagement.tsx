@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   Pill,
@@ -39,6 +39,7 @@ import {
 import { TodoListWidget } from './TodoListWidget';
 import { DrugInteractionChecker } from './DrugInteractionChecker';
 import { AIInsightPanel } from './AIInsightPanel';
+import { VoiceAgent } from './VoiceAgent';
 
 interface Medication {
   id: string;
@@ -62,79 +63,38 @@ interface Prescription {
 }
 
 export function PharmacyManagement() {
-  const [medications, setMedications] = useState<Medication[]>([
-    {
-      id: '1',
-      name: 'Amoxicillin 500mg',
-      category: 'Antibiotic',
-      stock: 450,
-      minStock: 200,
-      price: 12.5,
-      expiryDate: '2025-08-15',
-      manufacturer: 'PharmaCorp',
-      batchNumber: 'AMX2024-001',
-    },
-    {
-      id: '2',
-      name: 'Paracetamol 500mg',
-      category: 'Pain Relief',
-      stock: 120,
-      minStock: 300,
-      price: 5.0,
-      expiryDate: '2025-12-20',
-      manufacturer: 'MediCare',
-      batchNumber: 'PAR2024-045',
-    },
-    {
-      id: '3',
-      name: 'Insulin Glargine',
-      category: 'Diabetes',
-      stock: 85,
-      minStock: 100,
-      price: 45.0,
-      expiryDate: '2025-06-30',
-      manufacturer: 'DiabetesRx',
-      batchNumber: 'INS2024-012',
-    },
-    {
-      id: '4',
-      name: 'Lisinopril 10mg',
-      category: 'Cardiovascular',
-      stock: 380,
-      minStock: 150,
-      price: 18.5,
-      expiryDate: '2026-03-10',
-      manufacturer: 'HeartMed',
-      batchNumber: 'LIS2024-078',
-    },
-  ]);
+  const [medications, setMedications] = useState<Medication[]>([]);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>([
-    {
-      id: '1',
-      patientName: 'John Smith',
-      doctorName: 'Dr. Sarah Johnson',
-      medications: ['Amoxicillin 500mg', 'Paracetamol 500mg'],
-      date: '2024-12-08',
-      status: 'pending',
-    },
-    {
-      id: '2',
-      patientName: 'Emily Davis',
-      doctorName: 'Dr. Michael Chen',
-      medications: ['Insulin Glargine'],
-      date: '2024-12-08',
-      status: 'dispensed',
-    },
-    {
-      id: '3',
-      patientName: 'Robert Wilson',
-      doctorName: 'Dr. Sarah Johnson',
-      medications: ['Lisinopril 10mg'],
-      date: '2024-12-07',
-      status: 'completed',
-    },
-  ]);
+  useEffect(() => {
+    fetchPharmacyData();
+  }, []);
+
+  const fetchPharmacyData = async () => {
+    try {
+      setLoading(true);
+      const { pharmacyApi } = await import('../utils/api');
+      const medData = await pharmacyApi.getMedicines();
+      const formattedMeds: Medication[] = (medData || []).map((med: any) => ({
+        id: med.id,
+        name: med.name || med.medicine_name,
+        category: med.category || med.medicine_category || 'General',
+        stock: med.stock || med.quantity || 0,
+        minStock: med.minStock || med.min_stock || 100,
+        price: med.price || med.sale_rate || 0,
+        expiryDate: med.expiryDate?.split('T')[0] || med.expiry_date || '2025-12-31',
+        manufacturer: med.manufacturer || 'Unknown',
+        batchNumber: med.batchNumber || med.batch_no || 'N/A'
+      }));
+      setMedications(formattedMeds.length > 0 ? formattedMeds : []);
+    } catch (error) {
+      console.error('Error fetching pharmacy data:', error);
+      setMedications([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -176,21 +136,44 @@ export function PharmacyManagement() {
 
   const lowStockMeds = medications.filter((m) => m.stock < m.minStock);
 
-  const handleAddMedication = () => {
-    const newMed: Medication = {
-      id: Date.now().toString(),
-      name: formData.name || '',
-      category: formData.category || '',
-      stock: formData.stock || 0,
-      minStock: formData.minStock || 0,
-      price: formData.price || 0,
-      expiryDate: formData.expiryDate || '',
-      manufacturer: formData.manufacturer || '',
-      batchNumber: formData.batchNumber || '',
-    };
-    setMedications([...medications, newMed]);
-    setFormData({});
-    setIsAddModalOpen(false);
+  const handleAddMedication = async () => {
+    if (!formData.name || !formData.category) {
+      alert('Please fill in required fields');
+      return;
+    }
+    try {
+      const { pharmacyApi } = await import('../utils/api');
+      const newMed = await pharmacyApi.createMedicine({
+        name: formData.name,
+        category: formData.category,
+        stock: formData.stock || 0,
+        minStock: formData.minStock || 0,
+        price: formData.price || 0,
+        expiryDate: formData.expiryDate || '',
+        manufacturer: formData.manufacturer || '',
+        batchNumber: formData.batchNumber || '',
+      });
+      setMedications([...medications, newMed]);
+      setFormData({});
+      setIsAddModalOpen(false);
+    } catch (err) {
+      console.error('Failed to add medication:', err);
+      // Optimistic local update as fallback
+      const newMed: Medication = {
+        id: Date.now().toString(),
+        name: formData.name || '',
+        category: formData.category || '',
+        stock: formData.stock || 0,
+        minStock: formData.minStock || 0,
+        price: formData.price || 0,
+        expiryDate: formData.expiryDate || '',
+        manufacturer: formData.manufacturer || '',
+        batchNumber: formData.batchNumber || '',
+      };
+      setMedications([...medications, newMed]);
+      setFormData({});
+      setIsAddModalOpen(false);
+    }
   };
 
   const handleDispensePrescription = (id: string) => {
@@ -209,6 +192,7 @@ export function PharmacyManagement() {
           <h1 className="text-2xl text-gray-900">Pharmacy Management</h1>
           <p className="text-muted-foreground">Manage medications, prescriptions, and inventory</p>
         </div>
+        <VoiceAgent department="pharmacy" userRole="pharmacist" />
       </div>
 
       {/* Stats Cards */}

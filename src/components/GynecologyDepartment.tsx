@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { VoiceAgent } from './VoiceAgent';
 
 interface GynecologyPatient {
   id: string;
@@ -104,7 +105,9 @@ export function GynecologyDepartment({ session }: GynecologyProps) {
           <h1 className="text-3xl font-bold text-foreground">Gynecology Department</h1>
           <p className="text-muted-foreground">Comprehensive women's healthcare management</p>
         </div>
-        <Dialog open={newPatientOpen} onOpenChange={setNewPatientOpen}>
+        <div className="flex items-center gap-2">
+          <VoiceAgent department="gynecology" userRole={session?.role || 'doctor'} />
+          <Dialog open={newPatientOpen} onOpenChange={setNewPatientOpen}>
           <DialogTrigger asChild>
             <Button className="flex items-center gap-2">
               <Plus className="size-4" />
@@ -147,6 +150,7 @@ export function GynecologyDepartment({ session }: GynecologyProps) {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="flex items-center gap-4">

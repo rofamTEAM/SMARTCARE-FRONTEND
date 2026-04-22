@@ -96,18 +96,9 @@ export function SuperAdminDashboard({ session }: SuperAdminDashboardProps) {
 
   const fetchActiveUsers = async () => {
     try {
-      const response = await fetch(
-        `https://hankgamgdgodxtpwflpn.supabase.co/functions/v1/make-server-d8a3a34f/users`,
-        {
-          headers: {
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setActiveUsers(data.users || []);
-      }
+      const { apiClient } = await import('../services/apiClient');
+      const data = await apiClient.get('/users');
+      setActiveUsers(Array.isArray(data) ? data : data.users || []);
     } catch (error) {
       console.error('Error fetching active users:', error);
     }

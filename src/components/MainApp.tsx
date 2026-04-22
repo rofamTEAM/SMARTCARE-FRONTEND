@@ -46,7 +46,7 @@ import {
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { NewDashboard } from './NewDashboard';
-import { UserDashboard } from './UserDashboard';
+import { RealDataUserDashboard } from './RealDataUserDashboard';
 import { ReceptionistDashboard } from './ReceptionistDashboard';
 import { LabTechDashboard } from './LabTechDashboard';
 import { LabInvoiceGenerator } from './LabInvoiceGenerator';
@@ -105,52 +105,76 @@ import {
   ChangePassword 
 } from './SuperAdminComponentsNew';
 import { useThemeInitialization } from '../hooks/useThemeInitialization';
+import { ErrorBoundary } from './ErrorBoundary';
 
 type TabType = 'dashboard' | 'patients' | 'search-patients' | 'appointments' | 'payments' | 'employee' | 'activity' | 'statistics' | 'help' | 'settings' | 'reports' | 'users' | 'doctors' | 'doctor-portal' | 'pharmacy' | 'laboratory' | 'nursing' | 'inventory' | 'front-office' | 'workflow' | 'super-admin' | 'outpatient' | 'inpatient' | 'lab-invoice' | 'lab-results' | 'test-queue' | 'specimen-tracking' | 'ai-assistant' | 'blood-bank' | 'medical-records' | 'bed-management' | 'emergency' | 'expense-management' | 'income-management' | 'vehicle-management' | 'complaint-management' | 'system-settings' | 'super-admin-settings' | 'opd-report' | 'todo-list' | 'gynecology' | 'departments' | 'payroll' | 'attendance' | 'visitors' | 'queue-management' | 'pathology' | 'radiology' | 'ambulance' | 'operation-theatre' | 'billing' | 'workflows' | 'backup' | 'change-password' | 'setup';
 
 interface MainAppProps {
-  session: any;
-  supabase: any;
+  user: any;
+  onLogout: () => void;
 }
 
-export function MainApp({ session, supabase }: MainAppProps) {
+export function MainApp({ user, onLogout }: MainAppProps) {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [profileEditOpen, setProfileEditOpen] = useState(false);
   const [aiChatOpen, setAiChatOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const isMobile = window.innerWidth < 768;
-      const stored = localStorage.getItem('sidebar-collapsed');
-      return isMobile ? true : stored === 'true';
-    }
-    return false;
-  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Initialize theme system
   useThemeInitialization();
 
-  // Persist sidebar state and handle mobile
+  // Set sidebar state after mount to avoid SSR hydration mismatch
   useEffect(() => {
-    localStorage.setItem('sidebar-collapsed', sidebarCollapsed.toString());
+    if (window.innerWidth < 768) setSidebarCollapsed(true);
+  }, []);
+
+  // Auto-redirect based on user role on initial load
+  useEffect(() => {
+    const userRole = user?.role?.toLowerCase() || 'user';
     
-    const handleResize = () => {
-      const isMobile = window.innerWidth < 768;
-      if (isMobile && !sidebarCollapsed) {
-        setSidebarCollapsed(true);
+    // Only redirect if we're on the default dashboard tab
+    if (activeTab === 'dashboard') {
+      switch (userRole) {
+        case 'doctor':
+          setActiveTab('doctor-portal');
+          break;
+        case 'nurse':
+          setActiveTab('nursing');
+          break;
+        case 'pharmacist':
+          setActiveTab('pharmacy');
+          break;
+        case 'lab_technician':
+          setActiveTab('laboratory');
+          break;
+        case 'receptionist':
+          setActiveTab('dashboard'); // Receptionist dashboard is already set
+          break;
+        case 'admin':
+        case 'super_admin':
+          setActiveTab('dashboard'); // Admin dashboard is already set
+          break;
+        case 'user':
+        default:
+          setActiveTab('dashboard'); // User dashboard is already set
+          break;
       }
+    }
+  }, []); // Only run once on mount
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) setSidebarCollapsed(true);
     };
-    
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [sidebarCollapsed]);
+  }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
+  const handleLogout = () => onLogout();
 
-  const userName = session?.user?.user_metadata?.name || session?.user?.email || 'User';
-  const userRole = session?.user?.user_metadata?.role || 'user';
+  const userName = user?.name || user?.email || 'User';
+  const userRole = user?.role || 'user';
   const isAdmin = userRole === 'admin' || userRole === 'super_admin';
   const isSuperAdmin = userRole === 'super_admin';
 
@@ -169,27 +193,27 @@ export function MainApp({ session, supabase }: MainAppProps) {
 
     switch (activeTab) {
       case 'dashboard': 
-        return isSuperAdmin ? <AdminDashboard session={session} /> : 
-               userRole === 'receptionist' ? <ReceptionistDashboard session={session} /> : 
-               userRole === 'lab_technician' ? <LabTechDashboard session={session} onNavigate={(tab) => setActiveTab(tab as TabType)} /> :
-               userRole === 'user' ? <UserDashboard session={session} /> :
-               <NewDashboard session={session} />;
-      case 'workflow': return <PatientWorkflowManagement session={session} />;
-      case 'outpatient': return <OutpatientManagement session={session} />;
-      case 'inpatient': return <InpatientManagement session={session} />;
-      case 'front-office': return <FrontOffice session={session} />;
-      case 'patients': return <PatientsPage session={session} />;
-      case 'appointments': return <AppointmentsPage session={session} />;
-      case 'payments': return <PaymentsPage session={session} />;
-      case 'employee': return <EmployeePageNew session={session} />;
-      case 'statistics': return <StatisticsPage session={session} />;
-      case 'users': return <UserManagement session={session} />;
+        return isSuperAdmin ? <AdminDashboard session={user} /> : 
+               userRole === 'receptionist' ? <ReceptionistDashboard session={user} /> : 
+               userRole === 'lab_technician' ? <LabTechDashboard session={user} onNavigate={(tab) => setActiveTab(tab as TabType)} /> :
+               userRole === 'user' ? <RealDataUserDashboard session={user} /> :
+               <NewDashboard session={user} />;
+      case 'workflow': return <PatientWorkflowManagement session={user} />;
+      case 'outpatient': return <OutpatientManagement session={user} />;
+      case 'inpatient': return <InpatientManagement session={user} />;
+      case 'front-office': return <FrontOffice session={user} />;
+      case 'patients': return <PatientsPage session={user} />;
+      case 'appointments': return <AppointmentsPage session={user} />;
+      case 'payments': return <PaymentsPage session={user} />;
+      case 'employee': return <EmployeePageNew session={user} />;
+      case 'statistics': return <StatisticsPage session={user} />;
+      case 'users': return <UserManagement session={user} />;
       case 'doctors': return <DoctorManagement />;
-      case 'doctor-portal': return <DoctorPortal session={session} />;
+      case 'doctor-portal': return <DoctorPortal session={user} />;
       case 'pharmacy': return <PharmacyManagement />;
       case 'laboratory': return <LaboratoryManagement />;
       case 'nursing': return <NursingStation />;
-      case 'inventory': return <InventoryManagement session={session} />;
+      case 'inventory': return <InventoryManagement session={user} />;
       case 'activity': return <ActivityPage />;
       case 'help': return <HelpCenter />;
       case 'settings': return <SettingsPage />;
@@ -198,19 +222,19 @@ export function MainApp({ session, supabase }: MainAppProps) {
       case 'lab-results': return <LabResultsEntry />;
       case 'test-queue': return <TestQueueManagement />;
       case 'specimen-tracking': return <SpecimenTracking />;
-      case 'blood-bank': return <BloodBankManagement session={session} />;
-      case 'medical-records': return <MedicalRecordsManagement session={session} />;
-      case 'bed-management': return <BedManagement session={session} />;
-      case 'emergency': return <EmergencyManagement session={session} />;
-      case 'expense-management': return <ExpenseManagement session={session} />;
-      case 'income-management': return <IncomeManagement session={session} />;
-      case 'vehicle-management': return <VehicleManagement session={session} />;
-      case 'complaint-management': return <ComplaintManagement session={session} />;
-      case 'system-settings': return isSuperAdmin ? <SuperAdminSettings /> : <SystemSettings session={session} />;
+      case 'blood-bank': return <BloodBankManagement session={user} />;
+      case 'medical-records': return <MedicalRecordsManagement session={user} />;
+      case 'bed-management': return <BedManagement session={user} />;
+      case 'emergency': return <EmergencyManagement session={user} />;
+      case 'expense-management': return <ExpenseManagement session={user} />;
+      case 'income-management': return <IncomeManagement session={user} />;
+      case 'vehicle-management': return <VehicleManagement session={user} />;
+      case 'complaint-management': return <ComplaintManagement session={user} />;
+      case 'system-settings': return isSuperAdmin ? <SuperAdminSettings /> : <SystemSettings session={user} />;
       case 'opd-report': return <OPDReport />;
-      case 'todo-list': return <TodoList session={session} />;
-      case 'setup': return <SetupModule session={session} />;
-      default: return <NewDashboard session={session} />;
+      case 'todo-list': return <TodoList session={user} />;
+      case 'setup': return <SetupModule session={user} />;
+      default: return <NewDashboard session={user} />;
     }
   };
 
@@ -512,10 +536,12 @@ export function MainApp({ session, supabase }: MainAppProps) {
 
         {/* Page Content */}
         <main className="overflow-y-auto p-4 sm:p-6 lg:p-8">
-          {renderPage()}
+          <ErrorBoundary>
+            {renderPage()}
+          </ErrorBoundary>
         </main>
       </div>
-      
+
       {/* Mobile Content */}
       <div className="md:hidden flex flex-col min-h-screen">
         {/* Header */}
@@ -586,24 +612,22 @@ export function MainApp({ session, supabase }: MainAppProps) {
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-          {renderPage()}
+          <ErrorBoundary>
+            {renderPage()}
+          </ErrorBoundary>
         </main>
       </div>
 
-      {/* Profile Edit Dialog */}
       <ProfileEdit
         open={profileEditOpen}
         onClose={() => setProfileEditOpen(false)}
-        session={session}
-        supabase={supabase}
+        session={user}
       />
 
-      {/* Floating AI Assistant */}
       <FloatingAIButton currentPage={activeTab} userRole={userRole} />
 
-      {/* Navbar AI Chat */}
       <NavbarAIChat 
-        session={session} 
+        session={user} 
         isOpen={aiChatOpen} 
         onClose={() => setAiChatOpen(false)} 
       />

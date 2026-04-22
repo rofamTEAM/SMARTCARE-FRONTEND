@@ -70,3 +70,11 @@ hospital/
 database/
 Assests/
 .qodo/
+
+# Documentation files (development only)
+*.md
+!README.md
+!SETUP_GUIDE.md
+!QUICK_START.md
+!CONTRIBUTING.md
+!LICENSE.md

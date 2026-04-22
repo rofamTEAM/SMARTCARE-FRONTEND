@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { pathologyApi } from '../utils/api';
+import { VoiceAgent } from './VoiceAgent';
+
+interface PathologyTest {
   id: string;
   patientId: string;
   patientName: string;
@@ -114,7 +117,9 @@ export function PathologyManagement({ session }: PathologyManagementProps) {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Pathology Management</CardTitle>
-              <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+              <div className="flex items-center gap-2">
+                <VoiceAgent department="pathology" userRole={session?.role || 'lab_technician'} />
+                <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
                 <DialogTrigger asChild>
                   <Button onClick={() => setFormData({})}>
                     <Plus className="size-4 mr-2" />
@@ -210,6 +215,7 @@ export function PathologyManagement({ session }: PathologyManagementProps) {
                   </div>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
           </CardHeader>
           <CardContent>

@@ -30,7 +30,7 @@ export function AIAssistant({ session }: AIAssistantProps) {
   const [isLoading, setIsLoading] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  const userRole = session?.user?.user_metadata?.role || 'user';
+  const userRole = session?.role || 'user';
 
   useEffect(() => {
     if (scrollAreaRef.current) {

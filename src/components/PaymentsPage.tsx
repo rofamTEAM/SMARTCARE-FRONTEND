@@ -7,11 +7,21 @@ import { Input } from './ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
-import { paymentService, Payment } from '../utils/supabase/client';
+import { billingApi } from '../utils/api';
 import { AutoFillButton } from './AutoFillButton';
 
 interface PaymentsPageProps {
   session: any;
+}
+
+interface Payment {
+  id: string;
+  amount: number;
+  payment_method: string;
+  status: 'pending' | 'completed' | 'failed';
+  description?: string;
+  patient_id?: string;
+  created_at: string;
 }
 
 export function PaymentsPage({ session }: PaymentsPageProps) {
@@ -28,9 +38,10 @@ export function PaymentsPage({ session }: PaymentsPageProps) {
 
   const fetchPayments = async () => {
     try {
-      const data = await paymentService.getAll();
+      const data = await billingApi.getAll();
       setPayments(data || []);
     } catch (error) {
+      toast.error('Failed to fetch payments');
       setPayments([]);
     }
   };
@@ -43,7 +54,7 @@ export function PaymentsPage({ session }: PaymentsPageProps) {
 
     setLoading(true);
     try {
-      const newPayment = await paymentService.create({
+      const newPayment = await billingApi.create({
         patient_id: formData.patient_id || 'temp-patient-id',
         amount: formData.amount,
         payment_method: formData.payment_method,
@@ -67,7 +78,7 @@ export function PaymentsPage({ session }: PaymentsPageProps) {
     setLoading(true);
     
     try {
-      const updatedPayment = await paymentService.update(selectedPayment.id, {
+      const updatedPayment = await billingApi.update(selectedPayment.id, {
         amount: formData.amount,
         payment_method: formData.payment_method,
         status: formData.status,

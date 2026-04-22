@@ -30,9 +30,7 @@ export function ThemeProvider({
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem(storageKey) as Theme) || defaultTheme;
-    }
+    // Theme is kept in memory only - no localStorage persistence
     return defaultTheme;
   });
 
@@ -95,9 +93,7 @@ export function ThemeProvider({
   const value = {
     theme,
     setTheme: (theme: Theme) => {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(storageKey, theme);
-      }
+      // Theme is kept in memory only - no localStorage persistence
       setTheme(theme);
     },
   };

@@ -1,81 +1,70 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Search, Edit, Trash2, Eye } from 'lucide-react';
+import { Plus, Search, Edit, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
-import { useLocalStorage } from '../hooks/useLocalStorage';
-
-interface Patient {
-  id: string;
-  name: string;
-  age: number;
-  gender: string;
-  phone: string;
-  email: string;
-  address: string;
-  bloodType: string;
-  admissionDate: string;
-  condition: string;
-}
+import { toast } from 'sonner';
+import { Patient } from '@/types/patient';
+import { patientsService } from '@/services/patients.service';
 
 export function PatientManagement() {
-  const [patients, setPatients] = useLocalStorage<Patient[]>('patients', [
-    {
-      id: '1',
-      name: 'John Doe',
-      age: 45,
-      gender: 'Male',
-      phone: '+1234567890',
-      email: 'john.doe@email.com',
-      address: '123 Main St, City',
-      bloodType: 'O+',
-      admissionDate: '2024-11-25',
-      condition: 'Stable'
-    },
-    {
-      id: '2',
-      name: 'Jane Smith',
-      age: 32,
-      gender: 'Female',
-      phone: '+1234567891',
-      email: 'jane.smith@email.com',
-      address: '456 Oak Ave, City',
-      bloodType: 'A+',
-      admissionDate: '2024-11-28',
-      condition: 'Critical'
-    }
-  ]);
+  const [patients, setPatients] = useState<Patient[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [formData, setFormData] = useState<Partial<Patient>>({});
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    patientsService.getAll().then(res => setPatients(res.data || [])).catch(() => setPatients([]));
+  }, []);
 
   const filteredPatients = patients.filter(patient =>
-    patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    patient.phone.includes(searchTerm) ||
-    patient.email.toLowerCase().includes(searchTerm.toLowerCase())
+    patient.patient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    patient.mobileno.includes(searchTerm) ||
+    patient.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAdd = () => {
-    const newPatient: Patient = {
-      id: Date.now().toString(),
-      name: formData.name || '',
-      age: formData.age || 0,
-      gender: formData.gender || '',
-      phone: formData.phone || '',
-      email: formData.email || '',
-      address: formData.address || '',
-      bloodType: formData.bloodType || '',
-      admissionDate: formData.admissionDate || new Date().toISOString().split('T')[0],
-      condition: formData.condition || ''
-    };
-    setPatients([...patients, newPatient]);
-    setFormData({});
-    setIsAddModalOpen(false);
+  const handleAdd = async () => {
+    if (!formData.patient_name || !formData.mobileno || !formData.address) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Prepare data with camelCase for API (backend will convert to snake_case)
+      const patientData = {
+        patientName: formData.patient_name,
+        age: formData.age || '0',
+        gender: formData.gender || 'Other',
+        mobileno: formData.mobileno,
+        email: formData.email || '',
+        address: formData.address,
+        bloodGroup: formData.blood_group || 'Unknown',
+        dob: formData.dob || '',
+        guardianName: formData.guardian_name || '',
+        guardianPhone: formData.guardian_phone || '',
+        maritalStatus: formData.marital_status || 'Single',
+        knownAllergies: formData.known_allergies || 'None',
+        note: formData.note || '',
+      };
+
+      const newPatient = await patientsService.create(patientData);
+      setPatients([...patients, newPatient]);
+      setFormData({});
+      setIsAddModalOpen(false);
+      toast.success('Patient added successfully!');
+    } catch (error) {
+      console.error('Error adding patient:', error);
+      toast.error('Failed to add patient. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEdit = (patient: Patient) => {
@@ -84,17 +73,57 @@ export function PatientManagement() {
     setIsAddModalOpen(true);
   };
 
-  const handleUpdate = () => {
-    if (selectedPatient) {
-      setPatients(patients.map(p => p.id === selectedPatient.id ? { ...selectedPatient, ...formData } : p));
+  const handleUpdate = async () => {
+    if (!selectedPatient?.id) return;
+
+    setLoading(true);
+    try {
+      const patientData = {
+        patientName: formData.patient_name,
+        age: formData.age || '0',
+        gender: formData.gender || 'Other',
+        mobileno: formData.mobileno,
+        email: formData.email || '',
+        address: formData.address,
+        bloodGroup: formData.blood_group || 'Unknown',
+        dob: formData.dob || '',
+        guardianName: formData.guardian_name || '',
+        guardianPhone: formData.guardian_phone || '',
+        maritalStatus: formData.marital_status || 'Single',
+        knownAllergies: formData.known_allergies || 'None',
+        note: formData.note || '',
+      };
+
+      const updated = await patientsService.update(selectedPatient.id.toString(), patientData);
+      setPatients(patients.map(p => p.id === selectedPatient.id ? updated : p));
       setSelectedPatient(null);
       setFormData({});
       setIsAddModalOpen(false);
+      toast.success('Patient updated successfully!');
+    } catch (error) {
+      console.error('Error updating patient:', error);
+      toast.error('Failed to update patient. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDelete = (id: string) => {
-    setPatients(patients.filter(p => p.id !== id));
+  const handleDelete = async (id: number | undefined) => {
+    if (!id) return;
+    
+    if (!confirm('Are you sure you want to delete this patient?')) return;
+
+    setLoading(true);
+    try {
+      await patientsService.delete(id.toString());
+      setPatients(patients.filter(p => p.id !== id));
+      toast.success('Patient deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting patient:', error);
+      toast.error('Failed to delete patient. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -126,11 +155,11 @@ export function PatientManagement() {
                   </DialogHeader>
                   <div className="grid grid-cols-2 gap-4 py-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Full Name</Label>
+                      <Label htmlFor="patient_name">Full Name</Label>
                       <Input
-                        id="name"
-                        value={formData.name || ''}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        id="patient_name"
+                        value={formData.patient_name || ''}
+                        onChange={(e) => setFormData({ ...formData, patient_name: e.target.value })}
                         placeholder="Enter full name"
                       />
                     </div>
@@ -140,7 +169,7 @@ export function PatientManagement() {
                         id="age"
                         type="number"
                         value={formData.age || ''}
-                        onChange={(e) => setFormData({ ...formData, age: parseInt(e.target.value) })}
+                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
                         placeholder="Enter age"
                       />
                     </div>
@@ -154,20 +183,20 @@ export function PatientManagement() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="bloodType">Blood Type</Label>
+                      <Label htmlFor="blood_group">Blood Type</Label>
                       <Input
-                        id="bloodType"
-                        value={formData.bloodType || ''}
-                        onChange={(e) => setFormData({ ...formData, bloodType: e.target.value })}
+                        id="blood_group"
+                        value={formData.blood_group || ''}
+                        onChange={(e) => setFormData({ ...formData, blood_group: e.target.value })}
                         placeholder="e.g., O+, A-, AB+"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="phone">Phone</Label>
+                      <Label htmlFor="mobileno">Phone</Label>
                       <Input
-                        id="phone"
-                        value={formData.phone || ''}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        id="mobileno"
+                        value={formData.mobileno || ''}
+                        onChange={(e) => setFormData({ ...formData, mobileno: e.target.value })}
                         placeholder="Enter phone number"
                       />
                     </div>
@@ -191,21 +220,12 @@ export function PatientManagement() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="admissionDate">Admission Date</Label>
+                      <Label htmlFor="admission_date">Admission Date</Label>
                       <Input
-                        id="admissionDate"
+                        id="admission_date"
                         type="date"
-                        value={formData.admissionDate || ''}
-                        onChange={(e) => setFormData({ ...formData, admissionDate: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="condition">Condition</Label>
-                      <Input
-                        id="condition"
-                        value={formData.condition || ''}
-                        onChange={(e) => setFormData({ ...formData, condition: e.target.value })}
-                        placeholder="e.g., Stable, Critical"
+                        value={formData.admission_date || ''}
+                        onChange={(e) => setFormData({ ...formData, admission_date: e.target.value })}
                       />
                     </div>
                   </div>
@@ -247,7 +267,7 @@ export function PatientManagement() {
                     <div className="flex-1 grid grid-cols-5 gap-4">
                       <div>
                         <p className="text-xs text-muted-foreground">Name</p>
-                        <p className="text-sm text-gray-900">{patient.name}</p>
+                        <p className="text-sm text-gray-900">{patient.patient_name}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Age / Gender</p>
@@ -255,21 +275,15 @@ export function PatientManagement() {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Blood Type</p>
-                        <p className="text-sm text-gray-900">{patient.bloodType}</p>
+                        <p className="text-sm text-gray-900">{patient.blood_group}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Phone</p>
-                        <p className="text-sm text-gray-900">{patient.phone}</p>
+                        <p className="text-sm text-gray-900">{patient.mobileno}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Condition</p>
-                        <span className={`inline-block px-2 py-1 rounded text-xs ${
-                          patient.condition === 'Critical' ? 'bg-red-100 text-destructive' :
-                          patient.condition === 'Stable' ? 'bg-green-100 text-primary' :
-                          'bg-yellow-100 text-yellow-700'
-                        }`}>
-                          {patient.condition}
-                        </span>
+                        <p className="text-xs text-muted-foreground">Admission</p>
+                        <p className="text-sm text-gray-900">{patient.admission_date}</p>
                       </div>
                     </div>
                     <div className="flex gap-2">

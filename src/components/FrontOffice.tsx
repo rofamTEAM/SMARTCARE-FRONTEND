@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Users, UserPlus, ClipboardList, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Users, UserPlus, ClipboardList, Clock, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { PatientRegistration } from './PatientRegistration';
 import { VisitorManagement } from './VisitorManagement';
 import { QueueManagement } from './QueueManagement';
-import { projectId } from '../utils/supabase/info';
+import { VoiceAgent } from './VoiceAgent';
+import { frontofficeService } from '../services/frontoffice.service';
+import { toast } from 'sonner';
+import { errorHandler } from '../utils/errorHandler';
 
 interface FrontOfficeProps {
   session: any;
@@ -19,6 +22,7 @@ export function FrontOffice({ session }: FrontOfficeProps) {
     queueLength: 0,
     completedToday: 0,
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchStats();
@@ -26,18 +30,24 @@ export function FrontOffice({ session }: FrontOfficeProps) {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-d8a3a34f/front-office/stats`,
-        {
-          headers: {
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-        }
-      );
-      const data = await response.json();
-      setStats(data.stats || stats);
+      setLoading(true);
+      // Fetch appointments to calculate stats
+      const appointments = await frontofficeService.getAppointments();
+      const visitors = await frontofficeService.getVisitors();
+      
+      const today = new Date().toISOString().split('T')[0];
+      
+      setStats({
+        todayRegistrations: appointments.filter(a => a.appointmentDate === today).length,
+        activeVisitors: visitors.filter(v => v.visitDate === today).length,
+        queueLength: appointments.filter(a => a.status === 'scheduled').length,
+        completedToday: appointments.filter(a => a.status === 'completed' && a.appointmentDate === today).length,
+      });
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -54,7 +64,10 @@ export function FrontOffice({ session }: FrontOfficeProps) {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
-        <h1 className="text-2xl text-gray-900 mb-6">Front Office Management</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl text-gray-900">Front Office Management</h1>
+          <VoiceAgent department="front-office" userRole={session?.role || 'receptionist'} />
+        </div>
 
         <div className="grid grid-cols-4 gap-4 mb-6">
           {statCards.map((stat, index) => {

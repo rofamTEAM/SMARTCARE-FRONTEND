@@ -19,9 +19,10 @@ import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { toast } from 'sonner';
+import { todosApi } from '../utils/api';
 
 interface TodoItem {
-  id: string;
+  id: string | number;
   title: string;
   description: string;
   priority: 'Low' | 'Medium' | 'High' | 'Critical';
@@ -42,6 +43,7 @@ interface TodoListWidgetProps {
 export function TodoListWidget({ session, maxItems = 5 }: TodoListWidgetProps) {
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [newTodo, setNewTodo] = useState({
     title: '',
     description: '',
@@ -62,95 +64,125 @@ export function TodoListWidget({ session, maxItems = 5 }: TodoListWidgetProps) {
     'Nurse John', 'Admin Staff', 'Lab Tech', 'Pharmacist'
   ];
 
-  const sampleTodos: TodoItem[] = [
-    {
-      id: '1',
-      title: 'Update Patient Records',
-      description: 'Migrate patient records to new digital format',
-      priority: 'High',
-      status: 'In Progress',
-      assignedTo: 'Admin Staff',
-      department: 'Administration',
-      dueDate: '2024-01-20',
-      createdDate: '2024-01-15',
-      createdBy: 'Super Admin',
-      completed: false
-    },
-    {
-      id: '2',
-      title: 'Equipment Check',
-      description: 'Monthly maintenance of cardiology equipment',
-      priority: 'Medium',
-      status: 'Pending',
-      assignedTo: 'Dr. Smith',
-      department: 'Cardiology',
-      dueDate: '2024-01-18',
-      createdDate: '2024-01-10',
-      createdBy: 'Department Head',
-      completed: false
-    },
-    {
-      id: '3',
-      title: 'Staff Training',
-      description: 'Emergency response training for nursing staff',
-      priority: 'Critical',
-      status: 'Pending',
-      assignedTo: 'Nurse Mary',
-      department: 'Nursing',
-      dueDate: '2024-01-17',
-      createdDate: '2024-01-12',
-      createdBy: 'HR Manager',
-      completed: false
-    }
-  ];
-
   useEffect(() => {
-    setTodos(sampleTodos);
+    fetchTodos();
   }, []);
 
-  const handleAddTodo = () => {
+  const fetchTodos = async () => {
+    try {
+      setLoading(true);
+      const data = await todosApi.getAll();
+      if (data && Array.isArray(data)) {
+        const formattedTodos = data.map((todo: any) => ({
+          id: todo.id,
+          title: todo.title || todo.name || 'Untitled',
+          description: todo.description || todo.notes || '',
+          priority: todo.priority || 'Medium',
+          status: todo.status || 'Pending',
+          assignedTo: todo.assignedTo || todo.assignee || 'Unassigned',
+          department: todo.department || 'General',
+          dueDate: todo.dueDate || todo.date || new Date().toISOString().split('T')[0],
+          createdDate: todo.createdDate || todo.createdAt || new Date().toISOString().split('T')[0],
+          createdBy: todo.createdBy || 'System',
+          completed: todo.completed || todo.status === 'Completed'
+        }));
+        setTodos(formattedTodos);
+      }
+    } catch (error) {
+      console.error('Failed to fetch todos:', error);
+      // Fall back to empty list if API fails
+      setTodos([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddTodo = async () => {
     if (!newTodo.title.trim()) {
       toast.error('Please enter a task title');
       return;
     }
 
-    const todo: TodoItem = {
-      id: Date.now().toString(),
-      ...newTodo,
-      status: 'Pending',
-      createdDate: new Date().toISOString().split('T')[0],
-      createdBy: session?.user?.user_metadata?.name || 'User',
-      completed: false
-    };
+    try {
+      const todoData = {
+        title: newTodo.title,
+        description: newTodo.description,
+        priority: newTodo.priority,
+        assignedTo: newTodo.assignedTo,
+        department: newTodo.department,
+        dueDate: newTodo.dueDate ? new Date(newTodo.dueDate) : new Date(),
+        status: 'Pending',
+        createdBy: session?.name || 'User'
+      };
 
-    setTodos([...todos, todo]);
-    setNewTodo({
-      title: '',
-      description: '',
-      priority: 'Medium',
-      assignedTo: '',
-      department: '',
-      dueDate: ''
-    });
-    setIsAddDialogOpen(false);
-    toast.success('Task added successfully');
+      const savedTodo = await todosApi.create(todoData);
+      
+      const formattedTodo: TodoItem = {
+        id: savedTodo.id,
+        title: savedTodo.title || newTodo.title,
+        description: savedTodo.description || newTodo.description,
+        priority: savedTodo.priority || newTodo.priority,
+        status: 'Pending',
+        assignedTo: savedTodo.assignedTo || newTodo.assignedTo,
+        department: savedTodo.department || newTodo.department,
+        dueDate: newTodo.dueDate,
+        createdDate: new Date().toISOString().split('T')[0],
+        createdBy: session?.name || 'User',
+        completed: false
+      };
+
+      setTodos([...todos, formattedTodo]);
+      setNewTodo({
+        title: '',
+        description: '',
+        priority: 'Medium',
+        assignedTo: '',
+        department: '',
+        dueDate: ''
+      });
+      setIsAddDialogOpen(false);
+      toast.success('Task added successfully');
+    } catch (error) {
+      console.error('Error adding todo:', error);
+      toast.error('Failed to add task');
+    }
   };
 
-  const handleToggleComplete = (id: string) => {
-    setTodos(todos.map(todo => 
-      todo.id === id 
-        ? { 
-            ...todo, 
-            completed: !todo.completed,
-            status: !todo.completed ? 'Completed' : 'Pending'
-          }
-        : todo
-    ));
+  const handleToggleComplete = async (id: string | number) => {
+    try {
+      const todo = todos.find(t => t.id === id);
+      if (!todo) return;
+
+      const newStatus = todo.completed ? 'Pending' : 'Completed';
+      await todosApi.update(id, {
+        status: newStatus,
+        completed: !todo.completed
+      });
+
+      setTodos(todos.map(t => 
+        t.id === id 
+          ? { 
+              ...t, 
+              completed: !t.completed,
+              status: newStatus
+            }
+          : t
+      ));
+    } catch (error) {
+      console.error('Error updating todo:', error);
+      toast.error('Failed to update task');
+    }
   };
 
-  const handleDeleteTodo = (id: string) => {
-    setTodos(todos.filter(todo => todo.id !== id));
-    toast.success('Task deleted successfully');
+  const handleDeleteTodo = async (id: string | number) => {
+    try {
+      await todosApi.delete(id);
+      setTodos(todos.filter(todo => todo.id !== id));
+      toast.success('Task deleted successfully');
+    } catch (error) {
+      console.error('Error deleting todo:', error);
+      toast.error('Failed to delete task');
+    }
   };
 
   const getPriorityColor = (priority: string) => {

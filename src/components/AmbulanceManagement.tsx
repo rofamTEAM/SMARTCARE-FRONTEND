@@ -8,8 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { ambulanceApi } from '../utils/api';
+import { VoiceAgent } from './VoiceAgent';
 
 interface AmbulanceCall {
+  id: string;
   id: string;
   patientName: string;
   contactNumber: string;
@@ -42,7 +44,7 @@ export function AmbulanceManagement({ session }: AmbulanceManagementProps) {
     call.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!formData.patientName || !formData.contactNumber || !formData.pickupAddress) {
       toast.error('Please fill in required fields');
       return;
@@ -89,7 +91,9 @@ export function AmbulanceManagement({ session }: AmbulanceManagementProps) {
                 <Truck className="h-6 w-6 mr-2" />
                 Ambulance Management
               </CardTitle>
-              <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+              <div className="flex items-center gap-2">
+                <VoiceAgent department="ambulance" userRole={session?.role || 'receptionist'} />
+                <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
                 <DialogTrigger asChild>
                   <Button onClick={() => setFormData({})}>
                     <Plus className="size-4 mr-2" />
@@ -169,6 +173,7 @@ export function AmbulanceManagement({ session }: AmbulanceManagementProps) {
                   </div>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
           </CardHeader>
           <CardContent>

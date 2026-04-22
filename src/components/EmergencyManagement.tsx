@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { DatabaseService } from '../utils/supabase/database';
+import { opdApi } from '../utils/api';
+import { VoiceAgent } from './VoiceAgent';
 
 interface EmergencyCase {
   id: string;
@@ -52,11 +53,31 @@ export function EmergencyManagement({ session }: EmergencyManagementProps) {
 
   const fetchEmergencyCases = async () => {
     try {
-      const { data } = await DatabaseService.getEmergencyCases();
-      setCases(data);
+      // Fetch from OPD API which handles emergency cases
+      const data = await opdApi.getAll();
+      // Filter for emergency/critical cases
+      const emergencyCases = (data || [])
+        .filter((case_: any) => case_.status === 'emergency' || case_.triage_level === 'critical' || case_.triage_level === 'urgent')
+        .map((case_: any) => ({
+          id: case_.id?.toString() || Date.now().toString(),
+          patient_name: case_.patient_name || case_.patientName || 'Unknown',
+          age: case_.age || 0,
+          gender: case_.gender || '',
+          contact: case_.contact || case_.phone || '',
+          emergency_contact: case_.emergency_contact || '',
+          chief_complaint: case_.chief_complaint || case_.reason || '',
+          triage_level: case_.triage_level || 'non_urgent',
+          arrival_time: case_.arrival_time || case_.createdAt || new Date().toISOString(),
+          assigned_doctor: case_.assigned_doctor || case_.doctorId || '',
+          status: case_.status || 'waiting',
+          vital_signs: case_.vital_signs,
+          notes: case_.notes || ''
+        }));
+      setCases(emergencyCases);
     } catch (error) {
       console.error('Error fetching emergency cases:', error);
       toast.error('Failed to load emergency cases');
+      setCases([]);
     }
   };
 
@@ -82,9 +103,20 @@ export function EmergencyManagement({ session }: EmergencyManagementProps) {
         notes: formData.notes || ''
       };
       
-      const { data } = await DatabaseService.createEmergencyCase(newCase);
-      if (data) {
-        setCases([...cases, data]);
+      // Create as OPD case with emergency flag
+      const createdCase = await opdApi.create({
+        patientName: newCase.patient_name,
+        age: newCase.age,
+        gender: newCase.gender,
+        phone: newCase.contact,
+        reason: newCase.chief_complaint,
+        notes: newCase.notes,
+        status: 'emergency',
+        triageLevel: newCase.triage_level
+      });
+      
+      if (createdCase) {
+        setCases([...cases, newCase]);
         setFormData({});
         setShowAddCase(false);
         toast.success('Emergency case added successfully!');
@@ -238,10 +270,13 @@ export function EmergencyManagement({ session }: EmergencyManagementProps) {
           <h1 className="text-2xl font-bold text-gray-900">Emergency Department</h1>
           <p className="text-muted-foreground">Manage emergency cases and triage</p>
         </div>
-        <Button onClick={() => setShowAddCase(true)}>
-          <Plus className="size-4 mr-2" />
-          New Emergency Case
-        </Button>
+        <div className="flex items-center gap-2">
+          <VoiceAgent department="emergency" userRole={session?.role || 'nurse'} />
+          <Button onClick={() => setShowAddCase(true)}>
+            <Plus className="size-4 mr-2" />
+            New Emergency Case
+          </Button>
+        </div>
       </div>
 
       {/* Statistics */}

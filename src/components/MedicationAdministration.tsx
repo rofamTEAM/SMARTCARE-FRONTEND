@@ -134,7 +134,7 @@ export function MedicationAdministration({ session }: { session: any }) {
             ...med,
             status: 'administered' as const,
             administered_time: currentTime,
-            administered_by: session?.user?.user_metadata?.name || 'Current User',
+            administered_by: session?.name || 'Current User',
             notes: notes || ''
           }
         : med
@@ -171,7 +171,7 @@ export function MedicationAdministration({ session }: { session: any }) {
             ...task,
             status: 'completed' as const,
             completed_time: currentTime,
-            completed_by: session?.user?.user_metadata?.name || 'Current User',
+            completed_by: session?.name || 'Current User',
             notes: notes || ''
           }
         : task

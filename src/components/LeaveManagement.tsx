@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { staffApi } from '../utils/api';
-import { staffApi } from '../utils/api';
+
+interface LeaveRequest {
   id: string;
   staffId: string;
   staffName: string;
@@ -58,7 +59,7 @@ export function LeaveManagement({ session }: { session: any }) {
     }
   };
 
-  const handleAddRequest = () => {
+  const handleAddRequest = async () => {
     if (!formData.staffId || !formData.leaveType || !formData.startDate || !formData.endDate) {
       toast.error('Please fill in all required fields');
       return;
@@ -91,10 +92,10 @@ export function LeaveManagement({ session }: { session: any }) {
     toast.success('Leave request submitted successfully!');
   };
 
-  const handleApproval = (id: string, status: 'Approved' | 'Rejected') => {
+  const handleApproval = async (id: string, status: 'Approved' | 'Rejected') => {
     const updatedRequests = leaveRequests.map(request =>
       request.id === id
-        ? { ...request, status, approvedBy: session?.user?.user_metadata?.name || 'Admin', approvedDate: new Date().toISOString().split('T')[0] }
+        ? { ...request, status, approvedBy: session?.name || 'Admin', approvedDate: new Date().toISOString().split('T')[0] }
         : request
     );
     setLeaveRequests(updatedRequests);
@@ -107,7 +108,7 @@ export function LeaveManagement({ session }: { session: any }) {
     toast.success(`Leave request ${status.toLowerCase()} successfully!`);
   };
 
-  const updateLeaveBalance = (requestId: string) => {
+  const updateLeaveBalance = async (requestId: string) => {
     const request = leaveRequests.find(r => r.id === requestId);
     if (!request) return;
 

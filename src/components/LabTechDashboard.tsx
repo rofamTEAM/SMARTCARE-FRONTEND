@@ -22,7 +22,7 @@ interface LabTechDashboardProps {
 }
 
 export function LabTechDashboard({ session, onNavigate }: LabTechDashboardProps) {
-  const userName = session?.user?.user_metadata?.name || 'Lab Technician';
+  const userName = session?.name || 'Lab Technician';
 
   // Lab-specific statistics
   const labStats = [

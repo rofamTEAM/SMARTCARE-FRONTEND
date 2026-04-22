@@ -1,22 +1,31 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Search, ArrowRight, CheckCircle, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
-import { appointmentsApi } from '../utils/api';
+import { appointmentsService } from '../services/appointments.service';
+import { errorHandler } from '../utils/errorHandler';
 
 
 interface QueueItem {
   id: string;
-  patientName: string;
-  tokenNumber: string;
-  department: string;
-  doctorName: string;
-  priority: 'Normal' | 'Urgent' | 'Emergency';
-  status: 'Waiting' | 'In-Progress' | 'Completed' | 'Cancelled';
-  queueTime: string;
+  patientId: string;
+  patientName?: string;
+  doctorId: string;
+  doctorName?: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  status: 'scheduled' | 'completed' | 'cancelled' | 'no-show';
+  reason: string;
+  notes?: string;
+  department?: string;
+  priority?: 'Normal' | 'Urgent' | 'Emergency';
+  tokenNumber?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface QueueManagementProps {
@@ -37,46 +46,59 @@ export function QueueManagement({ session, onUpdate }: QueueManagementProps) {
 
   const fetchQueue = async () => {
     try {
-      const data = await appointmentsApi.getAll('status=Waiting,In-Progress');
+      const data = await appointmentsService.getAll({ 
+        status: 'scheduled' 
+      });
       setQueue(data || []);
       onUpdate?.();
     } catch (error) {
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
       setQueue([]);
     }
   };
 
   const filteredQueue = queue.filter(item =>
-    item.patientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.tokenNumber?.includes(searchTerm) ||
-    item.department?.toLowerCase().includes(searchTerm.toLowerCase())
+    item.patientId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.reason?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.doctorId?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const generateToken = () => {
-    return `T${Date.now().toString().slice(-6)}`;
-  };
-
   const handleAdd = async () => {
-    if (!formData.patientName || !formData.department || !formData.doctorName) {
+    if (!formData.patientId || !formData.doctorId || !formData.appointmentDate || !formData.appointmentTime) {
+      toast.error('Please fill in all required fields');
       return;
     }
 
     setLoading(true);
     try {
-      const newItem = await appointmentsApi.create({
-        patientName: formData.patientName,
-        tokenNumber: generateToken(),
-        department: formData.department,
-        doctorName: formData.doctorName,
-        priority: formData.priority || 'Normal',
-        status: 'Waiting',
-        queueTime: new Date().toISOString()
+      const newItem = await appointmentsService.create({
+        patientId: formData.patientId,
+        doctorId: formData.doctorId,
+        appointmentDate: formData.appointmentDate,
+        appointmentTime: formData.appointmentTime,
+        reason: formData.reason || 'General Consultation',
+        notes: formData.notes
       });
-      setQueue([...queue, newItem]);
+      
+      // Add display fields for UI
+      const itemWithDisplay: QueueItem = {
+        ...newItem,
+        patientName: formData.patientName,
+        doctorName: formData.doctorName,
+        department: formData.department,
+        priority: formData.priority,
+        tokenNumber: formData.tokenNumber
+      };
+      
+      setQueue([...queue, itemWithDisplay]);
       setFormData({});
       setIsAddModalOpen(false);
       onUpdate?.();
+      toast.success('Appointment added to queue successfully!');
     } catch (error) {
-      console.error('Error adding to queue:', error);
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -84,11 +106,27 @@ export function QueueManagement({ session, onUpdate }: QueueManagementProps) {
 
   const handleStatusChange = async (id: string, status: QueueItem['status']) => {
     try {
-      const updated = await appointmentsApi.update(id, { status });
-      setQueue(queue.map(item => item.id === id ? updated : item));
+      const item = queue.find(q => q.id === id);
+      if (!item) return;
+      
+      const updated = await appointmentsService.update(id, { status });
+      
+      // Preserve display fields
+      const updatedWithDisplay: QueueItem = {
+        ...updated,
+        patientName: item.patientName,
+        doctorName: item.doctorName,
+        department: item.department,
+        priority: item.priority,
+        tokenNumber: item.tokenNumber
+      };
+      
+      setQueue(queue.map(q => q.id === id ? updatedWithDisplay : q));
       onUpdate?.();
+      toast.success(`Appointment status updated to ${status}`);
     } catch (error) {
-      console.error('Error updating queue status:', error);
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
     }
   };
 
@@ -124,12 +162,57 @@ export function QueueManagement({ session, onUpdate }: QueueManagementProps) {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
+                <Label htmlFor="patientId">Patient ID</Label>
+                <Input
+                  id="patientId"
+                  value={formData.patientId || ''}
+                  onChange={(e) => setFormData({ ...formData, patientId: e.target.value })}
+                  placeholder="Patient ID"
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="patientName">Patient Name</Label>
                 <Input
                   id="patientName"
                   value={formData.patientName || ''}
                   onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
                   placeholder="Full name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="doctorId">Doctor ID</Label>
+                <Input
+                  id="doctorId"
+                  value={formData.doctorId || ''}
+                  onChange={(e) => setFormData({ ...formData, doctorId: e.target.value })}
+                  placeholder="Doctor ID"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="doctorName">Doctor Name</Label>
+                <Input
+                  id="doctorName"
+                  value={formData.doctorName || ''}
+                  onChange={(e) => setFormData({ ...formData, doctorName: e.target.value })}
+                  placeholder="Doctor name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="appointmentDate">Date</Label>
+                <Input
+                  id="appointmentDate"
+                  type="date"
+                  value={formData.appointmentDate || ''}
+                  onChange={(e) => setFormData({ ...formData, appointmentDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="appointmentTime">Time</Label>
+                <Input
+                  id="appointmentTime"
+                  type="time"
+                  value={formData.appointmentTime || ''}
+                  onChange={(e) => setFormData({ ...formData, appointmentTime: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
@@ -149,15 +232,6 @@ export function QueueManagement({ session, onUpdate }: QueueManagementProps) {
                 </select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="doctorName">Doctor Name</Label>
-                <Input
-                  id="doctorName"
-                  value={formData.doctorName || ''}
-                  onChange={(e) => setFormData({ ...formData, doctorName: e.target.value })}
-                  placeholder="Doctor name"
-                />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="priority">Priority</Label>
                 <select
                   id="priority"
@@ -169,6 +243,24 @@ export function QueueManagement({ session, onUpdate }: QueueManagementProps) {
                   <option value="Urgent">Urgent</option>
                   <option value="Emergency">Emergency</option>
                 </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reason">Reason for Visit</Label>
+                <Input
+                  id="reason"
+                  value={formData.reason || ''}
+                  onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                  placeholder="Reason for appointment"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes (Optional)</Label>
+                <Input
+                  id="notes"
+                  value={formData.notes || ''}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Additional notes"
+                />
               </div>
             </div>
             <div className="flex justify-end gap-2">

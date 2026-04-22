@@ -20,8 +20,8 @@ export function AIAssistant({ session }: AIAssistantProps) {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const userRole = session?.user?.user_metadata?.role || 'user';
-  const userName = session?.user?.user_metadata?.name || 'User';
+  const userRole = session?.role || 'user';
+  const userName = session?.name || 'User';
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 
 export interface BaseSetupItem {
   id: string;
@@ -7,9 +8,14 @@ export interface BaseSetupItem {
 }
 
 export interface SetupConfig<T extends BaseSetupItem> {
-  storageKey: string;
-  defaultItems: T[];
+  fetchFn: () => Promise<T[]>;
+  createFn: (data: Omit<T, 'id' | 'isActive' | 'createdAt'>) => Promise<T>;
+  updateFn: (id: string, data: Partial<T>) => Promise<T>;
+  deleteFn: (id: string) => Promise<void>;
   searchFields: (keyof T)[];
+  // kept for backward compat but ignored
+  storageKey?: string;
+  defaultItems?: T[];
 }
 
 export function useSetupData<T extends BaseSetupItem>(config: SetupConfig<T>) {
@@ -17,68 +23,74 @@ export function useSetupData<T extends BaseSetupItem>(config: SetupConfig<T>) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<T | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = () => {
+  const loadData = useCallback(async () => {
     try {
-      const saved = localStorage.getItem(config.storageKey);
-      if (saved) {
-        setItems(JSON.parse(saved));
-      } else {
-        setItems(config.defaultItems);
-        localStorage.setItem(config.storageKey, JSON.stringify(config.defaultItems));
-      }
+      const data = await config.fetchFn();
+      setItems(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error loading setup data:', error);
+      setItems([]);
     }
-  };
+  }, [config.fetchFn]);
 
-  const saveItems = (newItems: T[]) => {
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const addItem = async (item: Omit<T, 'id' | 'isActive' | 'createdAt'>) => {
+    setLoading(true);
     try {
-      localStorage.setItem(config.storageKey, JSON.stringify(newItems));
-      setItems(newItems);
-    } catch (error) {
-      console.error('Error saving data:', error);
+      const created = await config.createFn(item);
+      setItems(prev => [...prev, created]);
+      toast.success('Added successfully!');
+      return created;
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to add item.');
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
-  const addItem = (item: Omit<T, 'id' | 'isActive' | 'createdAt'>) => {
-    const newItem = {
-      ...item,
-      id: Date.now().toString(),
-      isActive: true,
-      createdAt: new Date().toISOString()
-    } as T;
-    
-    saveItems([...items, newItem]);
-  };
-
-  const updateItem = (id: string, updates: Partial<T>) => {
-    const newItems = items.map(item => 
-      item.id === id ? { ...item, ...updates } : item
-    );
-    saveItems(newItems);
-  };
-
-  const deleteItem = (id: string) => {
-    if (confirm('Are you sure you want to delete this item?')) {
-      const newItems = items.filter(item => item.id !== id);
-      saveItems(newItems);
+  const updateItem = async (id: string, updates: Partial<T>) => {
+    setLoading(true);
+    try {
+      const updated = await config.updateFn(id, updates);
+      setItems(prev => prev.map(item => item.id === id ? updated : item));
+      toast.success('Updated successfully!');
+      return updated;
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update item.');
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
-  const toggleStatus = (id: string) => {
-    updateItem(id, { isActive: !items.find(i => i.id === id)?.isActive } as Partial<T>);
+  const deleteItem = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this item?')) return;
+    setLoading(true);
+    try {
+      await config.deleteFn(id);
+      setItems(prev => prev.filter(item => item.id !== id));
+      toast.success('Deleted successfully!');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete item.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleStatus = async (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (item) await updateItem(id, { isActive: !item.isActive } as Partial<T>);
   };
 
   const filteredItems = items.filter(item =>
     config.searchFields.some(field => {
       const value = item[field];
-      return typeof value === 'string' && 
-             value.toLowerCase().includes(searchTerm.toLowerCase());
+      return typeof value === 'string' &&
+        value.toLowerCase().includes(searchTerm.toLowerCase());
     })
   );
 
@@ -94,6 +106,8 @@ export function useSetupData<T extends BaseSetupItem>(config: SetupConfig<T>) {
     addItem,
     updateItem,
     deleteItem,
-    toggleStatus
+    toggleStatus,
+    loading,
+    reload: loadData,
   };
 }

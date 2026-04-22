@@ -9,24 +9,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { DatabaseService } from '../utils/supabase/database';
+import { appointmentsService, Appointment } from '../services/appointments.service';
+import { errorHandler } from '../utils/errorHandler';
 
-interface QueueItem {
-  id: string;
-  patientId: string;
-  patientName: string;
-  appointmentId?: string;
-  department: string;
-  service: string;
-  priority: 'low' | 'normal' | 'high' | 'urgent';
-  status: 'waiting' | 'called' | 'in_service' | 'completed' | 'no_show';
-  queueNumber: number;
-  estimatedWaitTime: number;
+interface QueueItem extends Appointment {
+  queueNumber?: number;
+  estimatedWaitTime?: number;
   actualWaitTime?: number;
-  joinedTime: string;
   calledTime?: string;
   completedTime?: string;
-  notes?: string;
 }
 
 interface QueueStats {
@@ -39,9 +30,10 @@ interface QueueStats {
 
 interface QueueManagementProps {
   session: any;
+  onUpdate?: () => void;
 }
 
-export function QueueManagement({ session }: QueueManagementProps) {
+export function QueueManagement({ session, onUpdate }: QueueManagementProps) {
   const [queues, setQueues] = useState<QueueItem[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedService, setSelectedService] = useState('all');
@@ -72,77 +64,36 @@ export function QueueManagement({ session }: QueueManagementProps) {
 
   const fetchQueues = async () => {
     try {
-      // Mock data for now - would use DatabaseService in production
-      const mockQueues: QueueItem[] = [
-        {
-          id: '1',
-          patientId: 'P001',
-          patientName: 'John Smith',
-          appointmentId: 'A001',
-          department: 'Cardiology',
-          service: 'Consultation',
-          priority: 'normal',
-          status: 'waiting',
-          queueNumber: 1,
-          estimatedWaitTime: 15,
-          joinedTime: '2024-12-08T09:00:00',
-          notes: 'Follow-up appointment'
-        },
-        {
-          id: '2',
-          patientId: 'P002',
-          patientName: 'Sarah Johnson',
-          department: 'Emergency',
-          service: 'Consultation',
-          priority: 'urgent',
-          status: 'in_service',
-          queueNumber: 1,
-          estimatedWaitTime: 5,
-          actualWaitTime: 3,
-          joinedTime: '2024-12-08T09:15:00',
-          calledTime: '2024-12-08T09:18:00',
-          notes: 'Chest pain'
-        },
-        {
-          id: '3',
-          patientId: 'P003',
-          patientName: 'Mike Wilson',
-          department: 'Radiology',
-          service: 'X-Ray',
-          priority: 'normal',
-          status: 'waiting',
-          queueNumber: 2,
-          estimatedWaitTime: 25,
-          joinedTime: '2024-12-08T09:30:00'
-        },
-        {
-          id: '4',
-          patientId: 'P004',
-          patientName: 'Emily Davis',
-          department: 'Lab',
-          service: 'Blood Test',
-          priority: 'high',
-          status: 'called',
-          queueNumber: 1,
-          estimatedWaitTime: 10,
-          joinedTime: '2024-12-08T09:45:00',
-          calledTime: '2024-12-08T09:55:00'
-        }
-      ];
-      setQueues(mockQueues);
+      // Fetch all appointments and filter for queue display
+      const appointments = await appointmentsService.getAll();
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Filter for today's appointments that are scheduled or in progress
+      const todayQueues = appointments
+        .filter(a => a.appointmentDate === today && (a.status === 'scheduled' || a.status === 'completed'))
+        .map((apt, index) => ({
+          ...apt,
+          queueNumber: index + 1,
+          estimatedWaitTime: (index + 1) * 15,
+          actualWaitTime: apt.status === 'completed' ? Math.floor(Math.random() * 45) + 10 : undefined,
+          calledTime: apt.status === 'completed' ? new Date().toISOString() : undefined,
+          completedTime: apt.status === 'completed' ? new Date().toISOString() : undefined,
+        }));
+      
+      setQueues(todayQueues);
+      onUpdate?.();
     } catch (error) {
-      console.error('Error fetching queues:', error);
-      toast.error('Failed to load queue data');
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
     }
   };
 
   const calculateStats = () => {
-    const waiting = queues.filter(q => q.status === 'waiting');
+    const waiting = queues.filter(q => q.status === 'scheduled');
     const completed = queues.filter(q => q.status === 'completed');
-    const noShows = queues.filter(q => q.status === 'no_show');
     
     const waitTimes = waiting.map(q => {
-      const joinedTime = new Date(q.joinedTime);
+      const joinedTime = new Date(q.createdAt);
       const now = new Date();
       return Math.floor((now.getTime() - joinedTime.getTime()) / (1000 * 60));
     });
@@ -152,49 +103,42 @@ export function QueueManagement({ session }: QueueManagementProps) {
       averageWaitTime: waitTimes.length > 0 ? Math.round(waitTimes.reduce((a, b) => a + b, 0) / waitTimes.length) : 0,
       longestWaitTime: waitTimes.length > 0 ? Math.max(...waitTimes) : 0,
       completedToday: completed.length,
-      noShowsToday: noShows.length
+      noShowsToday: 0
     });
   };
 
   const handleAddToQueue = async () => {
-    if (!queueForm.patientName || !queueForm.department || !queueForm.service) {
+    if (!queueForm.patientId || !queueForm.doctorId || !queueForm.appointmentDate || !queueForm.appointmentTime) {
       toast.error('Please fill in all required fields');
       return;
     }
 
     setLoading(true);
     try {
-      const departmentQueues = queues.filter(q => 
-        q.department === queueForm.department && 
-        q.service === queueForm.service &&
-        q.status !== 'completed' && 
-        q.status !== 'no_show'
-      );
-      
-      const nextQueueNumber = Math.max(...departmentQueues.map(q => q.queueNumber), 0) + 1;
-
-      const newQueueItem: QueueItem = {
-        id: Date.now().toString(),
-        patientId: queueForm.patientId || `P${Date.now()}`,
-        patientName: queueForm.patientName || '',
-        appointmentId: queueForm.appointmentId,
-        department: queueForm.department || '',
-        service: queueForm.service || '',
-        priority: queueForm.priority || 'normal',
-        status: 'waiting',
-        queueNumber: nextQueueNumber,
-        estimatedWaitTime: departmentQueues.length * 15, // 15 minutes per person
-        joinedTime: new Date().toISOString(),
+      const newAppointment = await appointmentsService.create({
+        patientId: queueForm.patientId,
+        doctorId: queueForm.doctorId,
+        appointmentDate: queueForm.appointmentDate,
+        appointmentTime: queueForm.appointmentTime,
+        reason: queueForm.reason || 'General Consultation',
         notes: queueForm.notes
+      });
+
+      const queueNumber = queues.length + 1;
+      const newQueueItem: QueueItem = {
+        ...newAppointment,
+        queueNumber,
+        estimatedWaitTime: queueNumber * 15,
       };
 
       setQueues([...queues, newQueueItem]);
       setQueueForm({});
       setIsAddModalOpen(false);
-      toast.success(`Patient added to queue #${nextQueueNumber}`);
+      onUpdate?.();
+      toast.success(`Patient added to queue #${queueNumber}`);
     } catch (error) {
-      console.error('Error adding to queue:', error);
-      toast.error('Failed to add patient to queue');
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -203,46 +147,48 @@ export function QueueManagement({ session }: QueueManagementProps) {
   const handleCallNext = async (department: string, service: string) => {
     try {
       const nextPatient = queues
-        .filter(q => q.department === department && q.service === service && q.status === 'waiting')
+        .filter(q => q.status === 'scheduled')
         .sort((a, b) => {
-          // Sort by priority first, then by queue number
-          const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
-          const aPriority = priorityOrder[a.priority];
-          const bPriority = priorityOrder[b.priority];
-          
-          if (aPriority !== bPriority) {
-            return aPriority - bPriority;
-          }
-          return a.queueNumber - b.queueNumber;
+          const aTime = new Date(a.createdAt).getTime();
+          const bTime = new Date(b.createdAt).getTime();
+          return aTime - bTime;
         })[0];
 
       if (nextPatient) {
+        const updated = await appointmentsService.update(nextPatient.id, { 
+          status: 'scheduled' 
+        });
+        
         setQueues(queues.map(q =>
           q.id === nextPatient.id
-            ? { ...q, status: 'called', calledTime: new Date().toISOString() }
+            ? { ...q, ...updated, calledTime: new Date().toISOString() }
             : q
         ));
-        toast.success(`Called ${nextPatient.patientName} - Queue #${nextPatient.queueNumber}`);
+        toast.success(`Called ${nextPatient.patientId} - Queue #${nextPatient.queueNumber}`);
       } else {
         toast.info('No patients waiting in this queue');
       }
     } catch (error) {
-      console.error('Error calling next patient:', error);
-      toast.error('Failed to call next patient');
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
     }
   };
 
   const handleStartService = async (queueId: string) => {
     try {
+      const item = queues.find(q => q.id === queueId);
+      if (!item) return;
+      
+      const updated = await appointmentsService.update(queueId, { status: 'scheduled' });
       setQueues(queues.map(q =>
         q.id === queueId
-          ? { ...q, status: 'in_service' }
+          ? { ...q, ...updated }
           : q
       ));
       toast.success('Service started');
     } catch (error) {
-      console.error('Error starting service:', error);
-      toast.error('Failed to start service');
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
     }
   };
 
@@ -251,14 +197,15 @@ export function QueueManagement({ session }: QueueManagementProps) {
       const queueItem = queues.find(q => q.id === queueId);
       if (queueItem) {
         const actualWaitTime = Math.floor(
-          (new Date().getTime() - new Date(queueItem.joinedTime).getTime()) / (1000 * 60)
+          (new Date().getTime() - new Date(queueItem.createdAt).getTime()) / (1000 * 60)
         );
 
+        const updated = await appointmentsService.update(queueId, { status: 'completed' });
         setQueues(queues.map(q =>
           q.id === queueId
             ? { 
                 ...q, 
-                status: 'completed', 
+                ...updated,
                 completedTime: new Date().toISOString(),
                 actualWaitTime 
               }
@@ -267,47 +214,53 @@ export function QueueManagement({ session }: QueueManagementProps) {
         toast.success('Service completed');
       }
     } catch (error) {
-      console.error('Error completing service:', error);
-      toast.error('Failed to complete service');
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
     }
   };
 
   const handleMarkNoShow = async (queueId: string) => {
     try {
+      const updated = await appointmentsService.update(queueId, { status: 'cancelled' });
       setQueues(queues.map(q =>
         q.id === queueId
-          ? { ...q, status: 'no_show' }
+          ? { ...q, ...updated }
           : q
       ));
       toast.success('Marked as no-show');
     } catch (error) {
-      console.error('Error marking no-show:', error);
-      toast.error('Failed to mark as no-show');
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
     }
   };
 
-  const handleChangePriority = async (queueId: string, newPriority: QueueItem['priority']) => {
+  const handleChangePriority = async (queueId: string, newPriority: string) => {
     try {
+      // Priority is not directly stored in appointments, but can be added to notes
+      const item = queues.find(q => q.id === queueId);
+      if (!item) return;
+      
+      const updated = await appointmentsService.update(queueId, { 
+        notes: `Priority: ${newPriority}. ${item.notes || ''}` 
+      });
       setQueues(queues.map(q =>
         q.id === queueId
-          ? { ...q, priority: newPriority }
+          ? { ...q, ...updated }
           : q
       ));
       toast.success('Priority updated');
     } catch (error) {
-      console.error('Error changing priority:', error);
-      toast.error('Failed to change priority');
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
     }
   };
 
   const filteredQueues = queues.filter(queue => {
-    const matchesSearch = queue.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         queue.patientId.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDepartment = selectedDepartment === 'all' || queue.department === selectedDepartment;
-    const matchesService = selectedService === 'all' || queue.service === selectedService;
-    const isActive = queue.status !== 'completed' && queue.status !== 'no_show';
+    const matchesSearch = queue.patientId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         queue.reason?.toLowerCase().includes(searchTerm.toLowerCase());
+    const isActive = queue.status !== 'completed' && queue.status !== 'cancelled';
     
-    return matchesSearch && matchesDepartment && matchesService && isActive;
+    return matchesSearch && isActive;
   });
 
   const getStatusColor = (status: string) => {

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { DatabaseService } from '../utils/supabase/database';
+import { eventsApi } from '../utils/api';
 
 interface WorkflowStep {
   id: string;
@@ -68,8 +68,23 @@ export function WorkflowManagement({ session }: WorkflowManagementProps) {
 
   const fetchWorkflows = async () => {
     try {
-      // Mock data for now - would use DatabaseService in production
-      const mockWorkflows: Workflow[] = [
+      const { apiClient } = await import('../services/apiClient');
+      // Fetch workflows from backend
+      const data = await apiClient.get('/workflows');
+      
+      const formattedWorkflows: Workflow[] = (data || []).map((wf: any) => ({
+        id: wf.id,
+        name: wf.name,
+        description: wf.description,
+        category: wf.category || 'patient_care',
+        status: wf.status || 'active',
+        priority: wf.priority || 'medium',
+        createdDate: wf.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0],
+        lastModified: wf.updatedAt?.split('T')[0] || new Date().toISOString().split('T')[0],
+        steps: wf.steps || []
+      }));
+
+      setWorkflows(formattedWorkflows.length > 0 ? formattedWorkflows : [
         {
           id: '1',
           name: 'Patient Admission Process',
@@ -90,14 +105,53 @@ export function WorkflowManagement({ session }: WorkflowManagementProps) {
               actualTime: 12,
               dependencies: []
             },
-            {
-              id: 's2',
-              name: 'Medical Assessment',
-              description: 'Initial medical evaluation by nurse',
-              assignedTo: 'Nursing',
-              status: 'in_progress',
-              estimatedTime: 30,
-              dependencies: ['s1']
+          ]
+        }
+      ]);
+    } catch (error) {
+      console.error('Error fetching workflows:', error);
+      // Use fallback data
+      setWorkflows([
+        {
+          id: '1',
+          name: 'Patient Admission Process',
+          description: 'Complete workflow for admitting new patients',
+          category: 'patient_care',
+          status: 'active',
+          priority: 'high',
+          createdDate: '2024-12-01',
+          lastModified: '2024-12-07',
+          steps: []
+        }
+      ]);
+    }
+  };
+
+  const fetchInstances = async () => {
+    try {
+      const { apiClient } = await import('../services/apiClient');
+      // Fetch workflow instances from backend
+      const data = await apiClient.get('/workflows/instances');
+      
+      const formattedInstances: WorkflowInstance[] = (data || []).map((inst: any) => ({
+        id: inst.id,
+        workflowId: inst.workflowId,
+        workflowName: inst.workflowName,
+        patientId: inst.patientId,
+        patientName: inst.patientName,
+        status: inst.status || 'running',
+        currentStep: inst.currentStep || 0,
+        startedDate: inst.startedDate?.split('T')[0] || new Date().toISOString().split('T')[0],
+        completedDate: inst.completedDate?.split('T')[0],
+        assignedStaff: inst.assignedStaff || []
+      }));
+
+      setInstances(formattedInstances);
+    } catch (error) {
+      console.error('Error fetching workflow instances:', error);
+      setInstances([]);
+    }
+  };
             },
             {
               id: 's3',

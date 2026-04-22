@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { useLocalStorage } from '../hooks/useLocalStorage';
 import { AIDiagnosisHelper } from './AIDiagnosisHelper';
 
 interface MedicalRecord {
@@ -24,7 +23,7 @@ interface MedicalRecord {
 }
 
 export function MedicalRecords() {
-  const [records, setRecords] = useLocalStorage<MedicalRecord[]>('medicalRecords', [
+  const [records, setRecords] = useState<MedicalRecord[]>([
     {
       id: '1',
       patientName: 'John Doe',

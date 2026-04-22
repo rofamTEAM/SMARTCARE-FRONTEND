@@ -131,7 +131,7 @@ export function SampleTracking({ session }: { session: any }) {
             ...sample, 
             results, 
             status: 'completed' as const,
-            verified_by: session?.user?.user_metadata?.name || 'Current User'
+            verified_by: session?.name || 'Current User'
           }
         : sample
     ));

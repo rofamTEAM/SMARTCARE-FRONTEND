@@ -10,7 +10,7 @@ import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Switch } from './ui/switch';
-import { DatabaseService } from '../utils/supabase/database';
+import { authApi } from '../utils/api';
 
 interface SystemUser {
   id: string;

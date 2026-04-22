@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { financeApi } from '../utils/api';
-import { financeApi } from '../utils/api';
+
+interface Income {
   id: string;
   name: string;
   date: string;
@@ -36,7 +37,7 @@ export function IncomeManagement({ session }: IncomeManagementProps) {
     income.category?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!formData.name || !formData.amount || !formData.category) {
       toast.error('Please fill in required fields');
       return;

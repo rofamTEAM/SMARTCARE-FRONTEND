@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from './ui/textarea';
 
 import { bloodBankApi } from '../utils/api';
+import { VoiceAgent } from './VoiceAgent';
 
 interface BloodDonor {
   id: string;
@@ -47,6 +48,9 @@ export function BloodBankManagement({ session }: BloodBankManagementProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddDonor, setShowAddDonor] = useState(false);
   const [showIssueBlood, setShowIssueBlood] = useState(false);
+  const [donorForm, setDonorForm] = useState<Partial<BloodDonor>>({});
+  const [issueForm, setIssueForm] = useState<Partial<BloodIssue>>({});
+  const [formLoading, setFormLoading] = useState(false);
 
   useEffect(() => {
     bloodBankApi.getDonors().then(setDonors).catch(() => {});
@@ -67,6 +71,46 @@ export function BloodBankManagement({ session }: BloodBankManagementProps) {
       'O-': 'bg-green-200 text-green-900'
     };
     return colors[bloodGroup as keyof typeof colors] || 'bg-muted text-gray-800';
+  };
+
+  const handleAddDonor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!donorForm.donor_name || !donorForm.blood_group) {
+      alert('Please fill in required fields');
+      return;
+    }
+    setFormLoading(true);
+    try {
+      const newDonor = await bloodBankApi.create(donorForm);
+      setDonors([...donors, newDonor]);
+      setDonorForm({});
+      setShowAddDonor(false);
+    } catch (err) {
+      console.error('Failed to add donor:', err);
+      alert('Failed to add donor. Please try again.');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleIssueBlood = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!issueForm.patient_name || !issueForm.blood_group) {
+      alert('Please fill in required fields');
+      return;
+    }
+    setFormLoading(true);
+    try {
+      const newIssue = await bloodBankApi.issueBlood(issueForm);
+      setIssues([...issues, newIssue]);
+      setIssueForm({});
+      setShowIssueBlood(false);
+    } catch (err) {
+      console.error('Failed to issue blood:', err);
+      alert('Failed to issue blood. Please try again.');
+    } finally {
+      setFormLoading(false);
+    }
   };
 
   const filteredDonors = donors.filter(donor =>
@@ -164,7 +208,8 @@ export function BloodBankManagement({ session }: BloodBankManagementProps) {
           <h1 className="text-2xl font-bold text-gray-900">Blood Bank Management</h1>
           <p className="text-muted-foreground">Manage blood donors, inventory, and blood issues</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <VoiceAgent department="blood-bank" userRole={session?.role || 'lab_technician'} />
           <Button onClick={() => setShowAddDonor(true)} className="glass-button smooth-transition glow-hover">
             <Plus className="size-4 mr-2" />
             Add Donor
@@ -290,21 +335,21 @@ export function BloodBankManagement({ session }: BloodBankManagementProps) {
           <DialogHeader>
             <DialogTitle>Add New Donor</DialogTitle>
           </DialogHeader>
-          <form className="space-y-4">
+          <form className="space-y-4" onSubmit={handleAddDonor}>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="donor_name">Donor Name</Label>
-                <Input id="donor_name" placeholder="Enter name" />
+                <Label htmlFor="donor_name">Donor Name *</Label>
+                <Input id="donor_name" placeholder="Enter name" value={donorForm.donor_name || ''} onChange={e => setDonorForm({ ...donorForm, donor_name: e.target.value })} />
               </div>
               <div>
                 <Label htmlFor="age">Age</Label>
-                <Input id="age" type="number" placeholder="Age" />
+                <Input id="age" type="number" placeholder="Age" value={donorForm.age || ''} onChange={e => setDonorForm({ ...donorForm, age: Number(e.target.value) })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="blood_group">Blood Group</Label>
-                <Select>
+                <Label htmlFor="blood_group">Blood Group *</Label>
+                <Select value={donorForm.blood_group || ''} onValueChange={v => setDonorForm({ ...donorForm, blood_group: v })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select blood group" />
                   </SelectTrigger>
@@ -317,7 +362,7 @@ export function BloodBankManagement({ session }: BloodBankManagementProps) {
               </div>
               <div>
                 <Label htmlFor="gender">Gender</Label>
-                <Select>
+                <Select value={donorForm.gender || ''} onValueChange={v => setDonorForm({ ...donorForm, gender: v })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
@@ -330,18 +375,18 @@ export function BloodBankManagement({ session }: BloodBankManagementProps) {
             </div>
             <div>
               <Label htmlFor="father_name">Father's Name</Label>
-              <Input id="father_name" placeholder="Enter father's name" />
+              <Input id="father_name" placeholder="Enter father's name" value={donorForm.father_name || ''} onChange={e => setDonorForm({ ...donorForm, father_name: e.target.value })} />
             </div>
             <div>
               <Label htmlFor="contact_no">Contact Number</Label>
-              <Input id="contact_no" placeholder="Enter contact number" />
+              <Input id="contact_no" placeholder="Enter contact number" value={donorForm.contact_no || ''} onChange={e => setDonorForm({ ...donorForm, contact_no: e.target.value })} />
             </div>
             <div>
               <Label htmlFor="address">Address</Label>
-              <Textarea id="address" placeholder="Enter address" />
+              <Textarea id="address" placeholder="Enter address" value={donorForm.address || ''} onChange={e => setDonorForm({ ...donorForm, address: e.target.value })} />
             </div>
             <div className="flex gap-2 pt-4">
-              <Button type="submit" className="flex-1">Add Donor</Button>
+              <Button type="submit" className="flex-1" disabled={formLoading}>{formLoading ? 'Adding...' : 'Add Donor'}</Button>
               <Button type="button" variant="outline" onClick={() => setShowAddDonor(false)}>Cancel</Button>
             </div>
           </form>
@@ -354,19 +399,19 @@ export function BloodBankManagement({ session }: BloodBankManagementProps) {
           <DialogHeader>
             <DialogTitle>Issue Blood</DialogTitle>
           </DialogHeader>
-          <form className="space-y-4">
+          <form className="space-y-4" onSubmit={handleIssueBlood}>
             <div>
               <Label htmlFor="bill_no">Bill Number</Label>
-              <Input id="bill_no" placeholder="Enter bill number" />
+              <Input id="bill_no" placeholder="Enter bill number" value={issueForm.bill_no || ''} onChange={e => setIssueForm({ ...issueForm, bill_no: e.target.value })} />
             </div>
             <div>
-              <Label htmlFor="patient_name">Patient Name</Label>
-              <Input id="patient_name" placeholder="Enter patient name" />
+              <Label htmlFor="patient_name">Patient Name *</Label>
+              <Input id="patient_name" placeholder="Enter patient name" value={issueForm.patient_name || ''} onChange={e => setIssueForm({ ...issueForm, patient_name: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="blood_group_issue">Blood Group</Label>
-                <Select>
+                <Label htmlFor="blood_group_issue">Blood Group *</Label>
+                <Select value={issueForm.blood_group || ''} onValueChange={v => setIssueForm({ ...issueForm, blood_group: v })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select blood group" />
                   </SelectTrigger>
@@ -384,14 +429,14 @@ export function BloodBankManagement({ session }: BloodBankManagementProps) {
             </div>
             <div>
               <Label htmlFor="doctor">Doctor</Label>
-              <Input id="doctor" placeholder="Enter doctor name" />
+              <Input id="doctor" placeholder="Enter doctor name" value={issueForm.doctor || ''} onChange={e => setIssueForm({ ...issueForm, doctor: e.target.value })} />
             </div>
             <div>
               <Label htmlFor="amount">Amount ($)</Label>
-              <Input id="amount" type="number" placeholder="Enter amount" />
+              <Input id="amount" type="number" placeholder="Enter amount" value={issueForm.amount || ''} onChange={e => setIssueForm({ ...issueForm, amount: Number(e.target.value) })} />
             </div>
             <div className="flex gap-2 pt-4">
-              <Button type="submit" className="flex-1">Issue Blood</Button>
+              <Button type="submit" className="flex-1" disabled={formLoading}>{formLoading ? 'Issuing...' : 'Issue Blood'}</Button>
               <Button type="button" variant="outline" onClick={() => setShowIssueBlood(false)}>Cancel</Button>
             </div>
           </form>

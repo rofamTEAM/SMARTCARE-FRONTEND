@@ -104,7 +104,7 @@ export function WorkflowManagement({ session }: WorkflowManagementProps) {
   const [modalType, setModalType] = useState<'register' | 'schedule' | 'checkin' | 'consult' | 'lab' | 'prescription' | 'billing'>('register');
   const [formData, setFormData] = useState<any>({});
 
-  const userRole = session?.user?.user_metadata?.role || 'user';
+  const userRole = session?.role || 'user';
 
   // Initialize with sample data
   useEffect(() => {

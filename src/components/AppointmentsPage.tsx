@@ -9,9 +9,12 @@ import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { toast } from 'sonner';
-import { appointmentsApi } from '../utils/api';
+import { appointmentsService, Appointment } from '../services/appointments.service';
 import { AutoFillButton } from './AutoFillButton';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { VoiceAgent } from './VoiceAgent';
+import { errorHandler } from '../utils/errorHandler';
+import { useFormSubmit } from '../hooks/useFormSubmit';
 
 
 
@@ -24,8 +27,20 @@ export function AppointmentsPage({ session }: AppointmentsPageProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<Appointment>>({});
-  const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  const { submit: submitAdd, loading: addLoading } = useFormSubmit({
+    successMessage: 'Appointment scheduled successfully!',
+    errorMessage: 'Failed to schedule appointment. Please try again.',
+  });
+
+  const { submit: submitDelete, loading: deleteLoading } = useFormSubmit({
+    successMessage: 'Appointment deleted successfully!',
+    errorMessage: 'Failed to delete appointment. Please try again.',
+    showToast: false,
+  });
+
+  const loading = addLoading || deleteLoading;
 
   useEffect(() => {
     fetchAppointments();
@@ -33,16 +48,21 @@ export function AppointmentsPage({ session }: AppointmentsPageProps) {
 
   const fetchAppointments = async () => {
     try {
-      const data = await appointmentsApi.getAll();
-      setAppointments(data);
+      const data = await appointmentsService.getAll();
+      // Ensure data is an array
+      const appointmentsArray = Array.isArray(data) ? data : [];
+      setAppointments(appointmentsArray);
     } catch (error) {
+      const message = errorHandler.getUserFriendlyMessage(error);
+      toast.error(message);
       setAppointments([]);
     }
   };
 
   const filteredAppointments = appointments.filter(appointment => {
     const matchesSearch = appointment && (
-      appointment.doctor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      appointment.doctorId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      appointment.reason?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       appointment.notes?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     const matchesStatus = statusFilter === 'all' || appointment.status === statusFilter;
@@ -59,7 +79,7 @@ export function AppointmentsPage({ session }: AppointmentsPageProps) {
     },
     { 
       label: 'Scheduled Today', 
-      value: appointments.filter(a => a.appointment_date === new Date().toISOString().split('T')[0]).length.toString(), 
+      value: appointments.filter(a => a.appointmentDate === new Date().toISOString().split('T')[0]).length.toString(), 
       icon: Clock, 
       color: 'bg-amber-500' 
     },
@@ -71,7 +91,7 @@ export function AppointmentsPage({ session }: AppointmentsPageProps) {
     },
     { 
       label: 'Active Doctors', 
-      value: new Set(appointments.map(a => a.doctor_name)).size.toString(), 
+      value: new Set(appointments.map(a => a.doctorId)).size.toString(), 
       icon: Users, 
       color: 'bg-primary' 
     },
@@ -85,35 +105,31 @@ export function AppointmentsPage({ session }: AppointmentsPageProps) {
   ];
 
   const handleAdd = async () => {
-    if (!formData.doctor_name || !formData.appointment_date || !formData.appointment_time) {
+    if (!formData.doctorId || !formData.appointmentDate || !formData.appointmentTime) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    setLoading(true);
     try {
-      const newAppointment: Appointment = {
-        id: Date.now().toString(),
-        patient_id: formData.patient_id || 'temp-patient-id',
-        doctor_name: formData.doctor_name,
-        appointment_date: formData.appointment_date,
-        appointment_time: formData.appointment_time,
-        status: formData.status || 'scheduled',
-        notes: formData.notes || '',
-        created_at: new Date().toISOString()
-      };
+      await submitAdd(async () => {
+        const newAppointment = await appointmentsService.create({
+          patientId: formData.patientId || 'temp-patient-id',
+          doctorId: formData.doctorId,
+          appointmentDate: formData.appointmentDate,
+          appointmentTime: formData.appointmentTime,
+          reason: formData.reason || 'General Consultation',
+          notes: formData.notes
+        });
 
-      const savedAppointment = await appointmentsApi.create(newAppointment);
-      setAppointments([...appointments, savedAppointment]);
-      
-      setFormData({});
-      setIsAddModalOpen(false);
-      toast.success('Appointment scheduled successfully!');
+        setAppointments([...appointments, newAppointment]);
+        
+        setFormData({});
+        setIsAddModalOpen(false);
+        
+        return newAppointment;
+      });
     } catch (error) {
       console.error('Error adding appointment:', error);
-      toast.error('Failed to schedule appointment. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -121,12 +137,14 @@ export function AppointmentsPage({ session }: AppointmentsPageProps) {
     if (!confirm('Are you sure you want to delete this appointment?')) return;
     
     try {
-      await appointmentsApi.delete(id);
-      setAppointments(appointments.filter(appointment => appointment.id !== id));
-      toast.success('Appointment deleted successfully!');
+      await submitDelete(async () => {
+        await appointmentsService.delete(id);
+        setAppointments(appointments.filter(appointment => appointment.id !== id));
+        toast.success('Appointment deleted successfully!');
+        return null;
+      });
     } catch (error) {
       console.error('Error deleting appointment:', error);
-      toast.error('Failed to delete appointment. Please try again.');
     }
   };
 
@@ -140,7 +158,10 @@ export function AppointmentsPage({ session }: AppointmentsPageProps) {
           <CalendarIcon className="size-8 text-primary" />
           Appointment Management
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Schedule and manage patient appointments</p>
+        <div className="flex items-center gap-3 mt-1">
+          <p className="text-sm text-muted-foreground">Schedule and manage patient appointments</p>
+          <VoiceAgent department="appointments" userRole={session?.role || 'receptionist'} />
+        </div>
       </motion.div>
 
       {/* Stats Cards */}
@@ -204,35 +225,35 @@ export function AppointmentsPage({ session }: AppointmentsPageProps) {
                     </div>
                     <div className="grid grid-cols-2 gap-4 py-4">
                       <div className="space-y-2">
-                        <Label htmlFor="doctor_name">Doctor Name</Label>
+                        <Label htmlFor="doctorId">Doctor ID</Label>
                         <Input
-                          id="doctor_name"
-                          value={formData.doctor_name || ''}
-                          onChange={(e) => setFormData({ ...formData, doctor_name: e.target.value })}
-                          placeholder="Enter doctor name"
+                          id="doctorId"
+                          value={formData.doctorId || ''}
+                          onChange={(e) => setFormData({ ...formData, doctorId: e.target.value })}
+                          placeholder="Enter doctor ID"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="appointment_date">Date</Label>
+                        <Label htmlFor="appointmentDate">Date</Label>
                         <Input
-                          id="appointment_date"
+                          id="appointmentDate"
                           type="date"
-                          value={formData.appointment_date || ''}
-                          onChange={(e) => setFormData({ ...formData, appointment_date: e.target.value })}
+                          value={formData.appointmentDate || ''}
+                          onChange={(e) => setFormData({ ...formData, appointmentDate: e.target.value })}
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="appointment_time">Time</Label>
+                        <Label htmlFor="appointmentTime">Time</Label>
                         <Input
-                          id="appointment_time"
+                          id="appointmentTime"
                           type="time"
-                          value={formData.appointment_time || ''}
-                          onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
+                          value={formData.appointmentTime || ''}
+                          onChange={(e) => setFormData({ ...formData, appointmentTime: e.target.value })}
                         />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="status">Status</Label>
-                        <Select value={formData.status || 'scheduled'} onValueChange={(value) => setFormData({ ...formData, status: value as 'scheduled' | 'completed' | 'cancelled' })}>
+                        <Select value={formData.status || 'scheduled'} onValueChange={(value) => setFormData({ ...formData, status: value as 'scheduled' | 'completed' | 'cancelled' | 'no-show' })}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select status" />
                           </SelectTrigger>
@@ -240,8 +261,18 @@ export function AppointmentsPage({ session }: AppointmentsPageProps) {
                             <SelectItem value="scheduled">Scheduled</SelectItem>
                             <SelectItem value="completed">Completed</SelectItem>
                             <SelectItem value="cancelled">Cancelled</SelectItem>
+                            <SelectItem value="no-show">No Show</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+                      <div className="space-y-2 col-span-2">
+                        <Label htmlFor="reason">Reason for Visit</Label>
+                        <Input
+                          id="reason"
+                          value={formData.reason || ''}
+                          onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                          placeholder="Enter reason for appointment"
+                        />
                       </div>
                       <div className="space-y-2 col-span-2">
                         <Label htmlFor="notes">Notes</Label>
@@ -259,7 +290,7 @@ export function AppointmentsPage({ session }: AppointmentsPageProps) {
                       </Button>
                       <Button 
                         onClick={handleAdd}
-                        disabled={loading || !formData.doctor_name || !formData.appointment_date || !formData.appointment_time}
+                        disabled={loading || !formData.doctorId || !formData.appointmentDate || !formData.appointmentTime}
                         className="bg-primary hover:bg-primary/90"
                       >
                         {loading ? 'Scheduling...' : 'Schedule'} Appointment
@@ -307,14 +338,14 @@ export function AppointmentsPage({ session }: AppointmentsPageProps) {
                         <div className="bg-primary p-3 rounded-xl text-card-foreground">
                           <CalendarIcon className="size-6" />
                         </div>
-                        <div className="grid grid-cols-4 gap-4 flex-1">
+                      <div className="grid grid-cols-4 gap-4 flex-1">
                           <div>
                             <p className="text-xs text-muted-foreground">Doctor</p>
-                            <p className="text-sm text-gray-900">{appointment.doctor_name}</p>
+                            <p className="text-sm text-gray-900">{appointment.doctorId}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">Date & Time</p>
-                            <p className="text-sm text-gray-900">{appointment.appointment_date} {appointment.appointment_time}</p>
+                            <p className="text-sm text-gray-900">{appointment.appointmentDate} {appointment.appointmentTime}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground">Status</p>
