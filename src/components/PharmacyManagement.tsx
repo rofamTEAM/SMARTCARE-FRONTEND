@@ -5,6 +5,7 @@ import {
   Package,
   ShoppingCart,
   AlertTriangle,
+  AlertCircle,
   TrendingDown,
   Search,
   Plus,
@@ -36,10 +37,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
+import { toast } from 'sonner';
 import { TodoListWidget } from './TodoListWidget';
 import { DrugInteractionChecker } from './DrugInteractionChecker';
 import { AIInsightPanel } from './AIInsightPanel';
 import { VoiceAgent } from './VoiceAgent';
+import { useErrorHandler } from '../hooks/useErrorHandler';
 
 interface Medication {
   id: string;
@@ -66,6 +69,11 @@ export function PharmacyManagement() {
   const [medications, setMedications] = useState<Medication[]>([]);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [formData, setFormData] = useState<Partial<Medication>>({});
+  const { handleFetchError, handleSubmitError } = useErrorHandler();
 
   useEffect(() => {
     fetchPharmacyData();
@@ -74,6 +82,7 @@ export function PharmacyManagement() {
   const fetchPharmacyData = async () => {
     try {
       setLoading(true);
+      setError(null);
       const { pharmacyApi } = await import('../utils/api');
       const medData = await pharmacyApi.getMedicines();
       const formattedMeds: Medication[] = (medData || []).map((med: any) => ({
@@ -89,16 +98,13 @@ export function PharmacyManagement() {
       }));
       setMedications(formattedMeds.length > 0 ? formattedMeds : []);
     } catch (error) {
-      console.error('Error fetching pharmacy data:', error);
+      const message = handleFetchError(error, 'pharmacy medications');
+      setError(message);
       setMedications([]);
     } finally {
       setLoading(false);
     }
   };
-
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [formData, setFormData] = useState<Partial<Medication>>({});
 
   const stats = [
     {
@@ -138,10 +144,11 @@ export function PharmacyManagement() {
 
   const handleAddMedication = async () => {
     if (!formData.name || !formData.category) {
-      alert('Please fill in required fields');
+      toast.error('Please fill in required fields');
       return;
     }
     try {
+      setError(null);
       const { pharmacyApi } = await import('../utils/api');
       const newMed = await pharmacyApi.createMedicine({
         name: formData.name,
@@ -156,23 +163,10 @@ export function PharmacyManagement() {
       setMedications([...medications, newMed]);
       setFormData({});
       setIsAddModalOpen(false);
+      toast.success('Medication added successfully!');
     } catch (err) {
-      console.error('Failed to add medication:', err);
-      // Optimistic local update as fallback
-      const newMed: Medication = {
-        id: Date.now().toString(),
-        name: formData.name || '',
-        category: formData.category || '',
-        stock: formData.stock || 0,
-        minStock: formData.minStock || 0,
-        price: formData.price || 0,
-        expiryDate: formData.expiryDate || '',
-        manufacturer: formData.manufacturer || '',
-        batchNumber: formData.batchNumber || '',
-      };
-      setMedications([...medications, newMed]);
-      setFormData({});
-      setIsAddModalOpen(false);
+      const message = handleSubmitError(err, 'add medication');
+      setError(message);
     }
   };
 
@@ -186,6 +180,28 @@ export function PharmacyManagement() {
 
   return (
     <div className="p-6 space-y-6">
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-3"
+        >
+          <AlertCircle className="size-5 text-destructive flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Error Loading Data</p>
+            <p className="text-sm text-destructive/80 mt-1">{error}</p>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={fetchPharmacyData}
+            className="text-destructive hover:text-destructive"
+          >
+            Retry
+          </Button>
+        </motion.div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

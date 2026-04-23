@@ -65,14 +65,8 @@ const nextConfig = {
   // This fixes "Loading chunk failed" errors when accessing from different origins
   assetPrefix: process.env.NEXT_PUBLIC_ASSET_PREFIX || '',
 
-  // Configure allowed dev origins for network access
-  allowedDevOrigins: [
-    'localhost',
-    '127.0.0.1',
-    '192.168.56.1',
-    '192.168.1.1',
-    '10.0.0.1',
-  ],
+  // Ensure chunks are properly generated
+  productionBrowserSourceMaps: false,
 };
 
 module.exports = nextConfig;

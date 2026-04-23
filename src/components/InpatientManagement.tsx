@@ -7,6 +7,7 @@ import {
   FileText,
   Clock,
   AlertTriangle,
+  AlertCircle,
   Plus,
   Edit,
   Eye,
@@ -28,6 +29,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { ipdApi } from '../utils/api';
 import { VoiceAgent } from './VoiceAgent';
 import { InpatientAdmission } from '@/types/patient';
+import { useErrorHandler } from '../hooks/useErrorHandler';
 
 interface InpatientBed {
   id: string;
@@ -80,6 +82,8 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
   const [admissionForm, setAdmissionForm] = useState<Partial<InpatientAdmission>>({});
   const [vitalsForm, setVitalsForm] = useState<Partial<VitalSigns>>({});
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { handleFetchError, handleSubmitError } = useErrorHandler();
 
   useEffect(() => {
     fetchData();
@@ -87,14 +91,16 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
 
   const fetchData = async () => {
     try {
+      setError(null);
       const [bedsData, admissionsData] = await Promise.all([
         ipdApi.getAll(),
         ipdApi.getAll(),
       ]);
       setAdmissions(Array.isArray(admissionsData) ? admissionsData : []);
     } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Failed to load data');
+      const message = handleFetchError(error, 'inpatient data');
+      setError(message);
+      setAdmissions([]);
     }
   };
 
@@ -189,6 +195,28 @@ export function InpatientManagement({ session }: InpatientManagementProps) {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-3"
+        >
+          <AlertCircle className="size-5 text-destructive flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Error Loading Data</p>
+            <p className="text-sm text-destructive/80 mt-1">{error}</p>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={fetchData}
+            className="text-destructive hover:text-destructive"
+          >
+            Retry
+          </Button>
+        </motion.div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl text-gray-900">Inpatient Management</h1>

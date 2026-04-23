@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Search, Trash2, Eye, Download } from 'lucide-react';
+import { Plus, Search, Trash2, Eye, Download, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -9,6 +9,7 @@ import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { radiologyApi } from '../utils/api';
 import { VoiceAgent } from './VoiceAgent';
+import { useErrorHandler } from '../hooks/useErrorHandler';
 
 interface RadiologyTest {
   id: string;
@@ -36,6 +37,8 @@ export function RadiologyManagement({ session }: RadiologyManagementProps) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<RadiologyTest>>({});
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { handleFetchError, handleSubmitError, handleDeleteError } = useErrorHandler();
 
   useEffect(() => {
     fetchTests();
@@ -43,9 +46,12 @@ export function RadiologyManagement({ session }: RadiologyManagementProps) {
 
   const fetchTests = async () => {
     try {
+      setError(null);
       const data = await radiologyApi.getAll();
       setTests(data || []);
     } catch (error) {
+      const message = handleFetchError(error, 'radiology tests');
+      setError(message);
       setTests([]);
     }
   };
@@ -63,6 +69,7 @@ export function RadiologyManagement({ session }: RadiologyManagementProps) {
     }
 
     setLoading(true);
+    setError(null);
     try {
       const newTest = await radiologyApi.create({
         patientName: formData.patientName,
@@ -80,8 +87,8 @@ export function RadiologyManagement({ session }: RadiologyManagementProps) {
       setIsAddModalOpen(false);
       toast.success('Radiology test scheduled successfully!');
     } catch (error) {
-      console.error('Error adding test:', error);
-      toast.error('Failed to schedule test. Please try again.');
+      const message = handleSubmitError(error, 'schedule radiology test');
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -110,6 +117,28 @@ export function RadiologyManagement({ session }: RadiologyManagementProps) {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-3"
+        >
+          <AlertCircle className="size-5 text-destructive flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Error Loading Data</p>
+            <p className="text-sm text-destructive/80 mt-1">{error}</p>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={fetchTests}
+            className="text-destructive hover:text-destructive"
+          >
+            Retry
+          </Button>
+        </motion.div>
+      )}
+
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}

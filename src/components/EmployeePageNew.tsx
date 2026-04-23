@@ -76,7 +76,7 @@ export function EmployeePageNew({ session }: EmployeePageNewProps) {
       toast.success('Employee added successfully!');
     } catch (error: any) {
       console.error('Error adding employee:', error);
-      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to add employee. Please try again.';
+      const errorMessage = error?.message || 'Failed to add employee. Please try again.';
       toast.error(errorMessage);
     }
   };
@@ -104,7 +104,7 @@ export function EmployeePageNew({ session }: EmployeePageNewProps) {
       toast.success('Employee updated successfully!');
     } catch (error: any) {
       console.error('Error updating employee:', error);
-      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to update employee. Please try again.';
+      const errorMessage = error?.message || 'Failed to update employee. Please try again.';
       toast.error(errorMessage);
     }
   };

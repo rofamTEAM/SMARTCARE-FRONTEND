@@ -13,7 +13,7 @@ import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
-import { dashboardApi } from '../utils/api';
+import { dashboardService } from '../services/dashboard.service';
 import { PatientManagement } from './PatientManagement';
 import { AppointmentsPage } from './AppointmentsPage';
 import { DoctorManagement } from './DoctorManagement';
@@ -107,7 +107,7 @@ export function AdminDashboard({ session }: AdminDashboardProps) {
 
   const fetchDashboardStats = async () => {
     try {
-      const data = await dashboardApi.getStats();
+      const data = await dashboardService.getStats();
       setStats({
         totalPatients: data.totalPatients ?? 0,
         todayAppointments: data.todayAppointments ?? 0,
@@ -115,10 +115,11 @@ export function AdminDashboard({ session }: AdminDashboardProps) {
         pendingBills: data.pendingBills ?? 0,
         bloodUnits: data.bloodUnits ?? 0,
         pendingTests: data.pendingTests ?? 0,
-        revenue: data.revenue ?? 0,
+        revenue: data.totalRevenue ?? data.totalIncome ?? 0,
         bedOccupancy: data.bedOccupancy ?? 0,
       });
     } catch (error) {
+      console.error('Failed to fetch dashboard stats:', error);
       // keep default zeros
     }
   };
@@ -150,37 +151,21 @@ export function AdminDashboard({ session }: AdminDashboardProps) {
 
   const fetchRecentActivities = async () => {
     try {
-      const { apiClient } = await import('../services/apiClient');
-      const result = await apiClient.get('/dashboard/recent-activities');
-      const activities: any[] = [];
+      const activities = await dashboardService.getRecentActivities();
+      const formattedActivities = activities.map((activity: any) => {
+        const icon = activity.type === 'patient_registration' ? Users : Calendar;
+        return {
+          action: activity.description,
+          time: formatTimeAgo(activity.timestamp),
+          type: activity.type === 'patient_registration' ? 'patient' : 'appointment',
+          icon: icon
+        };
+      });
       
-      // Add recent patients
-      if (result.data?.recentPatients) {
-        result.data.recentPatients.forEach((patient: any) => {
-          activities.push({
-            action: `New patient registered: ${patient.patientName}`,
-            time: formatTimeAgo(patient.createdAt),
-            type: 'patient',
-            icon: Users
-          });
-        });
-      }
-      
-      // Add recent appointments
-      if (result.data?.recentAppointments) {
-        result.data.recentAppointments.forEach((apt: any) => {
-          activities.push({
-            action: `Appointment scheduled: ${apt.patientName} with ${apt.doctor}`,
-            time: formatTimeAgo(apt.date),
-            type: 'appointment',
-            icon: Calendar
-          });
-        });
-      }
-      
-      setRecentActivities(activities.slice(0, 5));
+      setRecentActivities(formattedActivities.slice(0, 5));
     } catch (error) {
       console.error('Failed to fetch recent activities:', error);
+      setRecentActivities([]);
     }
   };
 

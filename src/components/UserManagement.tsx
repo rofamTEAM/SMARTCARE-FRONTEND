@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Shield, ShieldAlert, Edit, Trash2, UserPlus, Search } from 'lucide-react';
+import { Users, Shield, ShieldAlert, Edit, Trash2, UserPlus, Search, Check } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -21,10 +21,20 @@ export function UserManagement({ session }: UserManagementProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newRole, setNewRole] = useState('');
   const [newUserData, setNewUserData] = useState({ name: '', email: '', password: '', role: 'user' });
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+
+  // Helper function to normalize roles for comparison
+  const normalizeRole = (role: string): string => {
+    if (!role) return 'user';
+    return role.toLowerCase().replace(/_/g, '_');
+  };
 
   const userRole = session?.role || 'user';
-  const isSuperAdmin = userRole === 'super_admin';
-  const userId = session?.user?.id || session?.id;
+  const normalizedRole = normalizeRole(userRole);
+  const isAdmin = normalizedRole === 'admin';
+  const isSuperAdmin = normalizedRole === 'super_admin';
+  const hasUserManagementAccess = isAdmin || isSuperAdmin;
+  const userId = session?.user?.id || session?.id || null;
 
   // Handle user creation updates from WebSocket/polling
   const handleUserCreated = (data: any) => {
@@ -38,60 +48,62 @@ export function UserManagement({ session }: UserManagementProps) {
     userId,
     role: userRole,
     onUserCreated: handleUserCreated,
-    enabled: isSuperAdmin // Only enable for super admins
+    enabled: hasUserManagementAccess // Only enable for admins and super admins
   });
 
   useEffect(() => {
     fetchUsers();
   }, []);
 
-  // Debug: Log when users state changes
-  useEffect(() => {
-    console.log('[USER MANAGEMENT] Users state updated:', users);
-    console.log('[USER MANAGEMENT] Users count:', users.length);
-  }, [users]);
-
   const fetchUsers = async () => {
     try {
       const { apiClient } = await import('../services/apiClient');
       const response = await apiClient.get<any>('/users');
       
-      console.log('[FETCH USERS] Raw response:', response);
-      console.log('[FETCH USERS] Response type:', typeof response);
-      console.log('[FETCH USERS] Response keys:', Object.keys(response || {}));
-      console.log('[FETCH USERS] Response.users:', (response as any)?.users);
-      console.log('[FETCH USERS] Is response.users an array?', Array.isArray((response as any)?.users));
+      console.log('[FETCH USERS] Full response:', response);
       
-      // apiClient already handles field conversion and unwraps the response
-      // Response should be { users: [...] } after apiClient processing
+      // apiClient automatically unwraps .data, so response is { users: [...] }
       let usersArray: any[] = [];
       
       if (Array.isArray(response)) {
-        console.log('[FETCH USERS] Response is array, length:', response.length);
         usersArray = response;
-      } else if ((response as any)?.users && Array.isArray((response as any).users)) {
-        console.log('[FETCH USERS] Response has users array, length:', (response as any).users.length);
-        usersArray = (response as any).users;
-      } else if ((response as any)?.data && Array.isArray((response as any).data)) {
-        console.log('[FETCH USERS] Response has data array, length:', (response as any).data.length);
-        usersArray = (response as any).data;
-      } else if (typeof response === 'object' && response !== null) {
-        console.log('[FETCH USERS] Response is object, trying to extract values');
-        // If it's an object but not an array, try to extract users
-        const values = Object.values(response).filter(item => typeof item === 'object' && item !== null && Array.isArray(item));
-        if (values.length > 0) {
-          console.log('[FETCH USERS] Found array in values, length:', values[0].length);
-          usersArray = values[0];
-        }
+      } else if (response?.users && Array.isArray(response.users)) {
+        usersArray = response.users;
+      } else if (response?.data && Array.isArray(response.data)) {
+        usersArray = response.data;
       }
       
-      console.log('[FETCH USERS] Final users array length:', usersArray.length);
-      console.log('[FETCH USERS] Final users array:', usersArray);
-      console.log('[FETCH USERS] Setting users state with:', usersArray);
+      console.log('[FETCH USERS] Extracted users:', usersArray);
+      console.log('[FETCH USERS] First user:', usersArray[0]);
+      
       setUsers(Array.isArray(usersArray) ? usersArray : []);
-      console.log('[FETCH USERS] State updated, users.length should be:', usersArray.length);
-    } catch (error) {
-      console.error('[FETCH USERS] Error:', error);
+    } catch (error: any) {
+      console.error('[FETCH USERS] Error caught:', error);
+      console.error('[FETCH USERS] Error type:', typeof error);
+      console.error('[FETCH USERS] Error keys:', Object.keys(error || {}));
+      
+      // Extract error details safely
+      const errorMessage = error?.message || (typeof error === 'string' ? error : 'Unknown error');
+      const errorStatus = error?.status || (error?.response?.status) || 0;
+      
+      console.error('[FETCH USERS] Extracted message:', errorMessage);
+      console.error('[FETCH USERS] Extracted status:', errorStatus);
+      
+      // Check if it's an authentication error
+      if (errorStatus === 401) {
+        console.error('[FETCH USERS] Authentication failed - user not logged in');
+        toast.error('Please log in to view users');
+      } else if (errorStatus === 403) {
+        console.error('[FETCH USERS] Authorization failed - user does not have ADMIN or SUPER_ADMIN role');
+        toast.error('You do not have permission to view users. Only ADMIN or SUPER_ADMIN can access this.');
+      } else if (errorStatus === 0 || errorMessage.includes('Cannot connect')) {
+        console.error('[FETCH USERS] Connection error');
+        toast.error('Cannot connect to server. Please check if the backend is running.');
+      } else {
+        console.error('[FETCH USERS] Unexpected error:', errorMessage);
+        toast.error(`Failed to fetch users: ${errorMessage}`);
+      }
+      
       setUsers([]);
     } finally {
       setLoading(false);
@@ -132,14 +144,7 @@ export function UserManagement({ session }: UserManagementProps) {
 
     try {
       setLoading(true);
-      // Use apiClient which handles authentication and credentials
       const { apiClient } = await import('../services/apiClient');
-      
-      console.log('[CREATE USER] Sending request with:', {
-        name: newUserData.name,
-        email: newUserData.email,
-        roleEnum: newUserData.role?.toUpperCase() || 'USER',
-      });
       
       const response = await apiClient.post('/users', {
         name: newUserData.name,
@@ -148,14 +153,11 @@ export function UserManagement({ session }: UserManagementProps) {
         roleEnum: newUserData.role?.toUpperCase() || 'USER',
       });
 
-      console.log('[CREATE USER] User created successfully:', response);
-      
       // Close modal BEFORE fetching to avoid state conflicts
       setShowCreateModal(false);
       setNewUserData({ name: '', email: '', password: '', role: 'user' });
       
-      // Now fetch users
-      console.log('[CREATE USER] Fetching updated user list...');
+      // Refresh users list immediately
       await fetchUsers();
       
       toast.success(`User created successfully! Welcome ${newUserData.name}`);
@@ -182,6 +184,76 @@ export function UserManagement({ session }: UserManagementProps) {
     }
   };
 
+  const handleDeleteAllUsers = async () => {
+    if (!confirm('Are you absolutely sure you want to delete ALL users? This action cannot be undone!')) return;
+    if (!confirm('This will delete all users except the current super admin. Continue?')) return;
+
+    try {
+      setLoading(true);
+      const { apiClient } = await import('../services/apiClient');
+      
+      // Delete all users except current super admin
+      const usersToDelete = users.filter(u => u.id !== userId);
+      
+      for (const user of usersToDelete) {
+        try {
+          await apiClient.delete(`/users/${user.id}`);
+        } catch (error) {
+          console.error(`Failed to delete user ${user.id}:`, error);
+        }
+      }
+
+      await fetchUsers();
+      toast.success('All users deleted successfully');
+    } catch (error) {
+      console.error('Error deleting all users:', error);
+      toast.error('Failed to delete all users');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleUserSelection = (userId: string) => {
+    const newSelected = new Set(selectedUserIds);
+    if (newSelected.has(userId)) {
+      newSelected.delete(userId);
+    } else {
+      newSelected.add(userId);
+    }
+    setSelectedUserIds(newSelected);
+  };
+
+  const handleDeleteSelectedUsers = async () => {
+    if (selectedUserIds.size === 0) {
+      toast.error('Please select users to delete');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedUserIds.size} selected user(s)?`)) return;
+
+    try {
+      setLoading(true);
+      const { apiClient } = await import('../services/apiClient');
+      
+      for (const userId of selectedUserIds) {
+        try {
+          await apiClient.delete(`/users/${userId}`);
+        } catch (error) {
+          console.error(`Failed to delete user ${userId}:`, error);
+        }
+      }
+
+      setSelectedUserIds(new Set());
+      await fetchUsers();
+      toast.success(`${selectedUserIds.size} user(s) deleted successfully`);
+    } catch (error) {
+      console.error('Error deleting selected users:', error);
+      toast.error('Failed to delete selected users');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredUsers = Array.isArray(users) ? users.filter(
     (user) =>
       user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -190,7 +262,8 @@ export function UserManagement({ session }: UserManagementProps) {
   ) : [];
 
   const getRoleIcon = (role: string) => {
-    switch (role) {
+    const normalized = normalizeRole(role);
+    switch (normalized) {
       case 'super_admin':
         return <ShieldAlert className="size-5 text-destructive" />;
       case 'admin':
@@ -201,7 +274,8 @@ export function UserManagement({ session }: UserManagementProps) {
   };
 
   const getRoleBadgeColor = (role: string) => {
-    switch (role) {
+    const normalized = normalizeRole(role);
+    switch (normalized) {
       case 'super_admin':
         return 'bg-destructive/10 text-destructive border-destructive/30';
       case 'admin':
@@ -210,6 +284,40 @@ export function UserManagement({ session }: UserManagementProps) {
         return 'bg-primary/10 text-primary border-primary/30';
     }
   };
+
+  const formatRoleDisplay = (role: string): string => {
+    const normalized = normalizeRole(role);
+    switch (normalized) {
+      case 'super_admin':
+        return 'Super Admin';
+      case 'admin':
+        return 'Admin';
+      case 'doctor':
+        return 'Doctor';
+      case 'nurse':
+        return 'Nurse';
+      case 'pharmacist':
+        return 'Pharmacist';
+      case 'lab_technician':
+        return 'Lab Technician';
+      case 'receptionist':
+        return 'Receptionist';
+      default:
+        return 'User';
+    }
+  };
+
+  if (!hasUserManagementAccess) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Denied</h2>
+          <p className="text-muted-foreground">You do not have permission to access User Management.</p>
+          <p className="text-sm text-muted-foreground mt-2">Only ADMIN and SUPER_ADMIN users can view this page.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -271,7 +379,7 @@ export function UserManagement({ session }: UserManagementProps) {
                 <div>
                   <p className="text-sm text-muted-foreground">Admins</p>
                   <h3 className="text-gray-900">
-                    {users.filter((u) => u.role === 'admin').length}
+                    {users.filter((u) => normalizeRole(u.role) === 'admin').length}
                   </h3>
                 </div>
               </div>
@@ -293,7 +401,7 @@ export function UserManagement({ session }: UserManagementProps) {
                 <div>
                   <p className="text-sm text-muted-foreground">Super Admins</p>
                   <h3 className="text-gray-900">
-                    {users.filter((u) => u.role === 'super_admin').length}
+                    {users.filter((u) => normalizeRole(u.role) === 'super_admin').length}
                   </h3>
                 </div>
               </div>
@@ -315,14 +423,34 @@ export function UserManagement({ session }: UserManagementProps) {
             </div>
             <div className="flex items-center gap-4">
               {isSuperAdmin && (
-                <Button
-                  onClick={() => setShowCreateModal(true)}
-                  className="bg-primary hover:bg-primary/90"
-                  size="sm"
-                >
-                  <UserPlus className="size-4 mr-2" />
-                  Create User
-                </Button>
+                <>
+                  <Button
+                    onClick={() => setShowCreateModal(true)}
+                    className="bg-primary hover:bg-primary/90"
+                    size="sm"
+                  >
+                    <UserPlus className="size-4 mr-2" />
+                    Create User
+                  </Button>
+                  {selectedUserIds.size > 0 && (
+                    <Button
+                      onClick={handleDeleteSelectedUsers}
+                      className="bg-destructive hover:bg-destructive/90"
+                      size="sm"
+                    >
+                      Delete Selected ({selectedUserIds.size})
+                    </Button>
+                  )}
+                  {users.length > 1 && selectedUserIds.size === 0 && (
+                    <Button
+                      onClick={handleDeleteAllUsers}
+                      className="bg-destructive hover:bg-destructive/90"
+                      size="sm"
+                    >
+                      Delete All Users
+                    </Button>
+                  )}
+                </>
               )}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground size-4" />
@@ -345,15 +473,25 @@ export function UserManagement({ session }: UserManagementProps) {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="flex items-center justify-between p-4 bg-muted/50 rounded-lg hover:bg-muted transition-colors"
+                className={`flex items-center justify-between p-4 rounded-lg hover:bg-muted transition-colors ${
+                  selectedUserIds.has(user.id) ? 'bg-primary/10 border-2 border-primary' : 'bg-muted/50'
+                }`}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-card-foreground">
-                    {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                <div className="flex items-center gap-4 flex-1">
+                  {isSuperAdmin && user.id !== userId && (
+                    <input
+                      type="checkbox"
+                      checked={selectedUserIds.has(user.id)}
+                      onChange={() => toggleUserSelection(user.id)}
+                      className="w-5 h-5 cursor-pointer"
+                    />
+                  )}
+                  <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-card-foreground font-semibold">
+                    {(user.name || user.email || 'U')?.charAt(0)?.toUpperCase()}
                   </div>
                   <div>
-                    <h4 className="text-gray-900">{user.name || 'Unknown'}</h4>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
+                    <h4 className="text-gray-900 font-medium">{user.name || user.email || 'Unknown User'}</h4>
+                    <p className="text-sm text-muted-foreground">{user.email || 'No email'}</p>
                   </div>
                 </div>
 
@@ -365,25 +503,11 @@ export function UserManagement({ session }: UserManagementProps) {
                         user.role
                       )}`}
                     >
-                      {user.role === 'super_admin'
-                        ? 'Super Admin'
-                        : user.role === 'admin'
-                        ? 'Admin'
-                        : user.role === 'doctor'
-                        ? 'Doctor'
-                        : user.role === 'nurse'
-                        ? 'Nurse'
-                        : user.role === 'pharmacist'
-                        ? 'Pharmacist'
-                        : user.role === 'lab_technician'
-                        ? 'Lab Technician'
-                        : user.role === 'receptionist'
-                        ? 'Receptionist'
-                        : 'User'}
+                      {formatRoleDisplay(user.role)}
                     </span>
                   </div>
 
-                  {isSuperAdmin && user.id !== session.user.id && (
+                  {isSuperAdmin && user.id !== userId && !selectedUserIds.has(user.id) && (
                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"

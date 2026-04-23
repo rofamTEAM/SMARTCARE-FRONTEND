@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { opdApi } from '../utils/api';
 import { VoiceAgent } from './VoiceAgent';
+import { useErrorHandler } from '../hooks/useErrorHandler';
 
 interface OutpatientAppointment {
   id: string;
@@ -70,6 +71,8 @@ export function OutpatientManagement({ session }: OutpatientManagementProps) {
   const [appointmentForm, setAppointmentForm] = useState<Partial<OutpatientAppointment>>({});
   const [consultationForm, setConsultationForm] = useState<Partial<OutpatientConsultation>>({});
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { handleFetchError, handleSubmitError } = useErrorHandler();
 
   useEffect(() => {
     fetchData();
@@ -77,11 +80,13 @@ export function OutpatientManagement({ session }: OutpatientManagementProps) {
 
   const fetchData = async () => {
     try {
+      setError(null);
       const data = await opdApi.getAll();
       setAppointments(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error fetching appointments:', error);
-      toast.error('Failed to load appointments');
+      const message = handleFetchError(error, 'outpatient appointments');
+      setError(message);
+      setAppointments([]);
     }
   };
 
@@ -132,6 +137,8 @@ export function OutpatientManagement({ session }: OutpatientManagementProps) {
   const handleCompleteConsultation = async () => {
     if (!selectedAppointment) return;
     try {
+      setLoading(true);
+      setError(null);
       await opdApi.update(selectedAppointment.id, { status: 'completed', ...consultationForm });
       const newConsultation: OutpatientConsultation = {
         id: Date.now().toString(),
@@ -146,7 +153,10 @@ export function OutpatientManagement({ session }: OutpatientManagementProps) {
       setSelectedAppointment(null);
       toast.success('Consultation completed successfully!');
     } catch (error) {
-      toast.error('Failed to complete consultation. Please try again.');
+      const message = handleSubmitError(error, 'complete consultation');
+      setError(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -163,6 +173,28 @@ export function OutpatientManagement({ session }: OutpatientManagementProps) {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-3"
+        >
+          <AlertCircle className="size-5 text-destructive flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Error Loading Data</p>
+            <p className="text-sm text-destructive/80 mt-1">{error}</p>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={fetchData}
+            className="text-destructive hover:text-destructive"
+          >
+            Retry
+          </Button>
+        </motion.div>
+      )}
+      
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl text-gray-900">Outpatient Management</h1>
@@ -454,6 +486,7 @@ export function OutpatientManagement({ session }: OutpatientManagementProps) {
                 return;
               }
               setLoading(true);
+              setError(null);
               try {
                 const newAppointment = await opdApi.create({
                   patient_name: appointmentForm.patientName,
@@ -472,8 +505,8 @@ export function OutpatientManagement({ session }: OutpatientManagementProps) {
                 setIsAppointmentModalOpen(false);
                 toast.success('Appointment scheduled successfully!');
               } catch (error) {
-                console.error('Error scheduling appointment:', error);
-                toast.error('Failed to schedule appointment');
+                const message = handleSubmitError(error, 'schedule appointment');
+                setError(message);
               } finally {
                 setLoading(false);
               }
